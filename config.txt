@@ -1,0 +1,35 @@
+# ------------------------------------------------------------------------
+# Zwitscher - Configuration File (config.txt)
+# ------------------------------------------------------------------------
+# 1. Speichere diese Datei direkt in das Hauptverzeichnis (Root) deiner SD-Karte.
+# 2. Passe die Platzhalter (ohne Leerzeichen nach dem "=") an dein Netzwerk an.
+# 3. Wenn du MQTT und WLAN nicht nutzen willst, setze MQTT_INTEGRATION=0 .
+# ------------------------------------------------------------------------
+
+# --- 1. Allgemeine Aktivierung ---
+# Setze diesen Wert auf 1, um WiFi und MQTT zu aktivieren.
+# Setze ihn auf 0 (oder lösche ihn), wenn der Player komplett offline bleiben soll.
+MQTT_INTEGRATION=0
+
+# --- 2. WLAN (WiFi) Einstellungen ---
+# Gib hier den Namen und das Passwort deines WLANs ein.
+WIFI_SSID=DeinWLANNetzwerkName
+WIFI_PASS=DeinWLANPasswort
+
+# --- 3. MQTT Broker Einstellungen ---
+# Gib hier die IP-Adresse deines MQTT Brokers (z.B. Raspberry Pi / Home Assistant) ein.
+MQTT_SERVER=192.168.1.100
+MQTT_PORT=1883
+
+# (Optional) Benutzername und Passwort für den MQTT Broker. 
+# Wenn dein Broker kein Login benötigt, kannst du dies einfach leer lassen.
+MQTT_USER=mqtt_benutzer
+MQTT_PASS=mqtt_passwort
+
+# --- 4. MQTT Topics und Client-Namen ---
+# ID des Players im Netzwerk
+MQTT_CLIENT_ID=ESP32_AudioPlayer
+
+# Das Basis-Topic für alle Status-Meldungen 
+# (z. B. audioplayer/status, audioplayer/playing, audioplayer/volume)
+MQTT_BASE_TOPIC=audioplayer
