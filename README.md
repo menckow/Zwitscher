@@ -14,6 +14,9 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
   - Bei 5 Minuten Inaktivität geht der ESP32 automatisch in den stromsparenden **Deep-Sleep-Modus**.
   - Wacht beim Auslösen des PIR-Sensors automatisch wieder auf.
   - Das aktuelle Verzeichnis und die Lautstärke werden ausfallsicher im **NVS (Non-Volatile Storage)** gespeichert und stehen nach dem Aufwachen direkt wieder zur Verfügung.
+- **Freundschaftslampe (RGB LED Ring):**
+  - Ein an Pin 12 angeschlossener LED-Ring leuchtet in deiner eigenen (in `config.txt` festgelegten) Farbe auf, wenn der PIR-Sensor auslöst.
+  - Optional wird dieses Farbsignal über MQTT an eine zweite Box gesendet, die dann in deiner Farbe leuchtet.
 - **Smart-Home / MQTT Integration:**
   - Optional konfigurierbar über eine `config.txt` auf der SD-Karte.
   - Verbindet sich über WiFi und schickt Echtzeit-Statusupdates über MQTT (Lautstärke, Wiedergabestatus, Fehler, aktuelle IP).
@@ -26,6 +29,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
 - **PIR Sensor:** Angeschlossen an `Pin 18`
 - **Taster:** Angeschlossen an `Pin 17` (Pull-up intern konfiguriert)
 - **Potentiometer:** Angeschlossen an `Pin 4`
+- **RGB LED Ring (NeoPixel):** Datenleitung angeschlossen an `Pin 12`
 - **I2S Audio:** Auspins für I2S Konfiguration (in Audiobibliothek integriert).
 
 ## 🗂 Ordnerstruktur auf der SD-Karte
@@ -59,6 +63,10 @@ MQTT_USER=mqtt_benutzer
 MQTT_PASS=mqtt_passwort
 MQTT_CLIENT_ID=ESP32_AudioPlayer
 MQTT_BASE_TOPIC=audioplayer
+
+FRIENDLAMP_ENABLE=1
+FRIENDLAMP_COLOR=0000FF
+FRIENDLAMP_TOPIC=audioplayer/friendlamp
 ```
 Wird die Datei weggelassen oder `MQTT_INTEGRATION=0` gesetzt, läuft der Player komplett offline.
 
@@ -80,6 +88,7 @@ Bei aktiver MQTT-Verbindung veröffentlicht der Aufbau auf folgenden Topics (bas
 * `audioplayer/directory`: Der Pfad zum frisch ausgewählten Verzeichnis auf der SD-Karte.
 * `audioplayer/playing`: Der Pfad der aktuell abgespielten MP3-Datei oder "STOPPED".
 * `audioplayer/ip_address`: Die aktuelle IP-Adresse im WLAN.
+* `audioplayer/friendlamp`: Wird zum Austausch der Farben für die Freundschaftslampe zwischen den Geräten genutzt.
 * `audioplayer/error`: Fehler-Meldungen (z.B. Dateisystem-Fehler, fehlende MP3s).
 
 ## 📄 Lizenz

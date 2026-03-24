@@ -33,3 +33,14 @@ MQTT_CLIENT_ID=ESP32_AudioPlayer
 # Das Basis-Topic für alle Status-Meldungen 
 # (z. B. audioplayer/status, audioplayer/playing, audioplayer/volume)
 MQTT_BASE_TOPIC=audioplayer
+
+# --- 5. Freundschaftslampe (RGB LED Ring) ---
+# Schaltet die LED-Ring-Funktion an (1) oder aus (0)
+FRIENDLAMP_ENABLE=1
+
+# Feste Sende-Farbe für DIESE Box im Hex-Format (z. B. FF0000 = Rot, 00FF00 = Grün, 0000FF = Blau)
+# Wenn der Bewegungsmelder (PIR) auslöst, wird diese Farbe gesendet.
+FRIENDLAMP_COLOR=0000FF
+
+# Topic über das die Lampen kommunizieren (muss auf beiden Boxen gleich sein!)
+FRIENDLAMP_TOPIC=audioplayer/friendlamp

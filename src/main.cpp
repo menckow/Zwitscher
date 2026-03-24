@@ -15,6 +15,7 @@
 #include <Preferences.h> 
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <Adafruit_NeoPixel.h>
 // ------------------------------------
 
 #define MAX_PATH_DEPTH 1
@@ -24,6 +25,10 @@ const int POT_PIN = 4;
 const int PIR_PIN = 18;
 const int SD_CS_PIN = SS;
 const int BUTTON_PIN = 17; //38
+const int LED_PIN = 12;
+const int LED_COUNT = 16;
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // --- Timeout-Konstanten ---
 const unsigned long maxPlaybackDuration = 5 * 60 * 1000UL;
@@ -44,6 +49,14 @@ String mqtt_pass = "";
 String mqtt_client_id = "ESP32_AudioPlayer"; // Default, falls Laden fehlschlägt
 String mqtt_base_topic = "audioplayer";      // Default, falls Laden fehlschlägt
 bool   mqtt_integration_enabled = false;     // Standardmäßig DEAKTIVIERT
+
+// Freundschaftslampe Variablen
+bool   friendlamp_enabled = false;
+String friendlamp_color = "0000FF";
+String friendlamp_topic = "audioplayer/friendlamp";
+unsigned long ledTimeout = 0;
+uint32_t currentLedColor = 0;
+bool ledActive = false;
 
 // Dynamisch erstellte MQTT Topics
 String mqtt_topic_status;
@@ -147,6 +160,12 @@ void loadConfig() {
             } else {
                 mqtt_integration_enabled = false;
             }
+        } else if (key == "FRIENDLAMP_ENABLE") {
+            friendlamp_enabled = (value == "1");
+        } else if (key == "FRIENDLAMP_COLOR") {
+            friendlamp_color = value;
+        } else if (key == "FRIENDLAMP_TOPIC") {
+            friendlamp_topic = value;
         }
     }
     configFile.close();
@@ -219,6 +238,32 @@ void publishMqtt(const String& topic, const String& payload, bool retain = false
     // Serial.printf("MQTT Publish: [%s] %s\n", topic.c_str(), payload.c_str()); // Debug
     mqttClient.publish(topic.c_str(), payload.c_str(), retain);
 }
+
+// --- MQTT Callback ---
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    String message = "";
+    for (int i = 0; i < length; i++) {
+        message += (char)payload[i];
+    }
+    Serial.printf("MQTT Received [%s]: %s\n", topic, message.c_str());
+
+    if (friendlamp_enabled && String(topic) == friendlamp_topic) {
+        // Erwartetes Format: "ClientID:ColorHEX" (z.B. "Box2:FF0000")
+        int separatorPos = message.indexOf(':');
+        if (separatorPos != -1) {
+            String senderId = message.substring(0, separatorPos);
+            String colorStr = message.substring(separatorPos + 1);
+            
+            // Reagiere nicht auf die eigene Nachricht
+            if (senderId != mqtt_client_id) {
+                currentLedColor = strtol(colorStr.c_str(), NULL, 16);
+                ledTimeout = millis() + 60000; // 1 Minute leuchten
+                ledActive = true;
+                Serial.printf("Friendship Lamp: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
+            }
+        }
+    }
+}
 // -----------------------------------------------
 
 // --- MQTT Wiederverbindungslogik ---
@@ -245,7 +290,9 @@ void mqtt_reconnect() {
             publishMqtt(mqtt_topic_ip, WiFi.localIP().toString(), true);
             publishMqtt(mqtt_topic_status, "Online", true); // Status setzen
              // Hier könnten ggf. Subscriptions erfolgen, falls benötigt
-             // mqttClient.subscribe("some/topic");
+             if (friendlamp_enabled) {
+                 mqttClient.subscribe(friendlamp_topic.c_str());
+             }
         } else {
             Serial.print("failed, rc=");
             Serial.print(mqttClient.state());
@@ -444,12 +491,20 @@ void setup() {
         if (mqtt_server != "") {
             mqttClient.setServer(mqtt_server.c_str(), mqtt_port);
             // Optional: Callback für eingehende Nachrichten setzen
-            // mqttClient.setCallback(mqttCallback);
+            mqttClient.setCallback(mqttCallback);
             Serial.println("MQTT Server configured.");
         } else {
              Serial.println("WARNING: MQTT Server not configured in config.txt, disabling MQTT.");
              mqtt_integration_enabled = false; // Deaktivieren wenn Server fehlt
         }
+    }
+
+    // --- LED_Ring Setup ---
+    if (friendlamp_enabled) {
+        strip.begin();
+        strip.show(); // Initialize all pixels to 'off'
+        strip.setBrightness(100); // Set brightness
+        Serial.println("Friendship Lamp (LED Ring) initialized.");
     }
 
     Serial.println("Scanning directories...");
@@ -529,6 +584,17 @@ void loop() {
             lastPirActivityTime = millis();
             Serial.println("\n+++ PIR TRIGGER +++");
             publishMqtt(mqtt_topic_status, "PIR Triggered"); // Status senden
+
+            // Freundschaftslampe: Sende Signal und leuchte auf
+            if (friendlamp_enabled) {
+                String payload = mqtt_client_id + ":" + friendlamp_color;
+                publishMqtt(friendlamp_topic, payload, false);
+                currentLedColor = strtol(friendlamp_color.c_str(), NULL, 16);
+                ledTimeout = millis() + 60000; // 1 Minute
+                ledActive = true;
+                Serial.println("Friendship Lamp: Sent color " + friendlamp_color);
+            }
+
              if (currentDirectoryIndex >= 0 && !currentMp3Files.empty()) {
                  inPlaybackSession = true;
                  playbackStartTime = millis();
@@ -595,6 +661,19 @@ void loop() {
 
             esp_sleep_enable_ext0_wakeup((gpio_num_t)PIR_PIN, 1);
             esp_deep_sleep_start();
+        }
+    }
+
+    if (friendlamp_enabled) {
+        if (ledActive) {
+            if (millis() > ledTimeout) {
+                ledActive = false;
+                strip.clear();
+                strip.show();
+            } else {
+                for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
+                strip.show();
+            }
         }
     }
 
