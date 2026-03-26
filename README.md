@@ -16,7 +16,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
   - Das aktuelle Verzeichnis und die Lautstärke werden ausfallsicher im **NVS (Non-Volatile Storage)** gespeichert und stehen nach dem Aufwachen direkt wieder zur Verfügung.
 - **Freundschaftslampe (RGB LED Ring):**
   - Ein an Pin 12 angeschlossener LED-Ring leuchtet in deiner eigenen (in `config.txt` festgelegten) Farbe auf, wenn der PIR-Sensor auslöst.
-  - Optional wird dieses Farbsignal über MQTT an eine zweite Box gesendet, die dann in deiner Farbe leuchtet.
+  - Optional wird dieses Farbsignal über MQTT an eine zweite Box gesendet, die dann in deiner Farbe leuchtet. (Hierfür kann auf Wunsch ein unabhängiger öffentlicher Broker, getrennt vom Smart-Home-Broker, konfiguriert werden).
 - **Smart-Home / MQTT Integration:**
   - Optional konfigurierbar über eine `config.txt` auf der SD-Karte.
   - Verbindet sich über WiFi und schickt Echtzeit-Statusupdates über MQTT (Lautstärke, Wiedergabestatus, Fehler, aktuelle IP).
@@ -67,6 +67,13 @@ MQTT_BASE_TOPIC=audioplayer
 FRIENDLAMP_ENABLE=1
 FRIENDLAMP_COLOR=0000FF
 FRIENDLAMP_TOPIC=audioplayer/friendlamp
+
+# --- Öffentlicher Broker für die Freundschaftslampe ---
+# Wenn diese Felder leer bleiben, wird automatisch der interne Broker verwendet.
+FRIENDLAMP_MQTT_SERVER=broker.hivemq.com
+FRIENDLAMP_MQTT_PORT=1883
+FRIENDLAMP_MQTT_USER=
+FRIENDLAMP_MQTT_PASS=
 ```
 Wird die Datei weggelassen oder `MQTT_INTEGRATION=0` gesetzt, läuft der Player komplett offline.
 

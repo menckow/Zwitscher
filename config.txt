@@ -44,3 +44,10 @@ FRIENDLAMP_COLOR=0000FF
 
 # Topic über das die Lampen kommunizieren (muss auf beiden Boxen gleich sein!)
 FRIENDLAMP_TOPIC=audioplayer/friendlamp
+
+# --- Öffentlicher Broker für die Freundschaftslampe ---
+# Wenn diese Felder leer bleiben, wird automatisch der interne Broker verwendet.
+FRIENDLAMP_MQTT_SERVER=broker.hivemq.com
+FRIENDLAMP_MQTT_PORT=1883
+FRIENDLAMP_MQTT_USER=
+FRIENDLAMP_MQTT_PASS=

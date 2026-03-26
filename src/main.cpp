@@ -50,6 +50,12 @@ String mqtt_client_id = "ESP32_AudioPlayer"; // Default, falls Laden fehlschläg
 String mqtt_base_topic = "audioplayer";      // Default, falls Laden fehlschlägt
 bool   mqtt_integration_enabled = false;     // Standardmäßig DEAKTIVIERT
 
+// Freundschaftslampe MQTT Variablen (Optionaler 2. Broker)
+String friendlamp_mqtt_server = "";
+int    friendlamp_mqtt_port = 1883;
+String friendlamp_mqtt_user = "";
+String friendlamp_mqtt_pass = "";
+
 // Freundschaftslampe Variablen
 bool   friendlamp_enabled = false;
 String friendlamp_color = "0000FF";
@@ -67,10 +73,16 @@ String mqtt_topic_directory;
 String mqtt_topic_playing;
 String mqtt_topic_ip;
 
-// MQTT Client Objekte
+// MQTT Client Objekte (Interner Broker)
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 unsigned long lastMqttReconnectAttempt = 0;
+
+// MQTT Client Objekte (Freundschaftslampe Broker)
+WiFiClient espClientLamp;
+PubSubClient mqttClientLamp(espClientLamp);
+unsigned long lastLampMqttReconnectAttempt = 0;
+
 const long mqttReconnectInterval = 5000; // Versuche alle 5 Sekunden erneut zu verbinden
 
 // --- Globale Variablen ---
@@ -166,6 +178,15 @@ void loadConfig() {
             friendlamp_color = value;
         } else if (key == "FRIENDLAMP_TOPIC") {
             friendlamp_topic = value;
+        } else if (key == "FRIENDLAMP_MQTT_SERVER") {
+            friendlamp_mqtt_server = value;
+        } else if (key == "FRIENDLAMP_MQTT_PORT") {
+            friendlamp_mqtt_port = value.toInt();
+            if (friendlamp_mqtt_port == 0) friendlamp_mqtt_port = 1883;
+        } else if (key == "FRIENDLAMP_MQTT_USER") {
+            friendlamp_mqtt_user = value;
+        } else if (key == "FRIENDLAMP_MQTT_PASS") {
+            friendlamp_mqtt_pass = value;
         }
     }
     configFile.close();
@@ -235,17 +256,31 @@ void publishMqtt(const String& topic, const String& payload, bool retain = false
         // Nicht senden, wenn deaktiviert oder nicht verbunden
         return;
     }
-    // Serial.printf("MQTT Publish: [%s] %s\n", topic.c_str(), payload.c_str()); // Debug
     mqttClient.publish(topic.c_str(), payload.c_str(), retain);
 }
 
-// --- MQTT Callback ---
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
+void publishMqttLamp(const String& topic, const String& payload, bool retain = false) {
+    if (!friendlamp_enabled || !mqtt_integration_enabled) return;
+    
+    // Wenn ein separater Server konfiguriert ist, nutze diesen, ansonsten den internen
+    if (friendlamp_mqtt_server != "") {
+        if (mqttClientLamp.connected()) {
+            mqttClientLamp.publish(topic.c_str(), payload.c_str(), retain);
+        }
+    } else {
+        if (mqttClient.connected()) {
+            mqttClient.publish(topic.c_str(), payload.c_str(), retain);
+        }
+    }
+}
+
+// --- MQTT Callbacks ---
+void handleLampMessage(char* topic, byte* payload, unsigned int length) {
     String message = "";
     for (int i = 0; i < length; i++) {
         message += (char)payload[i];
     }
-    Serial.printf("MQTT Received [%s]: %s\n", topic, message.c_str());
+    Serial.printf("Friendlamp MQTT Received [%s]: %s\n", topic, message.c_str());
 
     if (friendlamp_enabled && String(topic) == friendlamp_topic) {
         // Erwartetes Format: "ClientID:ColorHEX" (z.B. "Box2:FF0000")
@@ -264,19 +299,24 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         }
     }
 }
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+    // Wird für den internen Broker genutzt
+    handleLampMessage(topic, payload, length);
+}
+
+void mqttLampCallback(char* topic, byte* payload, unsigned int length) {
+    // Wird für den öffentlichen Broker genutzt
+    handleLampMessage(topic, payload, length);
+}
 // -----------------------------------------------
 
 // --- MQTT Wiederverbindungslogik ---
 void mqtt_reconnect() {
-    // Nur erneut versuchen, wenn Intervall abgelaufen ist
-    if (millis() - lastMqttReconnectAttempt < mqttReconnectInterval) {
-         return;
-    }
-    lastMqttReconnectAttempt = millis();
-
-    if (!mqttClient.connected()) {
-        Serial.print("Attempting MQTT connection...");
-        // Versuche zu verbinden
+    // --- Wiederverbindung für den internen Broker ---
+    if (!mqttClient.connected() && millis() - lastMqttReconnectAttempt > mqttReconnectInterval) {
+        lastMqttReconnectAttempt = millis();
+        Serial.print("Attempting Internal MQTT connection...");
         bool connected = false;
         if (mqtt_user.length() > 0) {
              connected = mqttClient.connect(mqtt_client_id.c_str(), mqtt_user.c_str(), mqtt_pass.c_str());
@@ -286,18 +326,43 @@ void mqtt_reconnect() {
 
         if (connected) {
             Serial.println("connected");
-            // Sende IP-Adresse (retained) nach erfolgreicher Verbindung
             publishMqtt(mqtt_topic_ip, WiFi.localIP().toString(), true);
-            publishMqtt(mqtt_topic_status, "Online", true); // Status setzen
-             // Hier könnten ggf. Subscriptions erfolgen, falls benötigt
-             if (friendlamp_enabled) {
+            publishMqtt(mqtt_topic_status, "Online", true); 
+             // Subscribe auf dem internen Broker nur, wenn kein separater Lampen-Broker konfiguriert ist
+             if (friendlamp_enabled && friendlamp_mqtt_server == "") {
                  mqttClient.subscribe(friendlamp_topic.c_str());
              }
         } else {
             Serial.print("failed, rc=");
             Serial.print(mqttClient.state());
-            Serial.println(" try again in 5 seconds");
-            // Wartezeit wird durch die Prüfung am Anfang von reconnect sichergestellt
+            Serial.println(" try again later");
+        }
+    }
+
+    // --- Wiederverbindung für den Freundschaftslampen-Broker (falls konfiguriert) ---
+    if (friendlamp_enabled && friendlamp_mqtt_server != "" && !mqttClientLamp.connected()) {
+        if (millis() - lastLampMqttReconnectAttempt > mqttReconnectInterval) {
+            lastLampMqttReconnectAttempt = millis();
+            Serial.print("Attempting Lamp MQTT connection...");
+            bool connected = false;
+            
+            // Um Kollisionen zu vermeiden, fügen wir _Lamp zur Client-ID hinzu, falls sie nicht einzigartig ist
+            String lampClientId = mqtt_client_id + "_Lamp";
+            
+            if (friendlamp_mqtt_user.length() > 0) {
+                 connected = mqttClientLamp.connect(lampClientId.c_str(), friendlamp_mqtt_user.c_str(), friendlamp_mqtt_pass.c_str());
+            } else {
+                 connected = mqttClientLamp.connect(lampClientId.c_str());
+            }
+
+            if (connected) {
+                Serial.println("connected");
+                mqttClientLamp.subscribe(friendlamp_topic.c_str());
+            } else {
+                Serial.print("failed, rc=");
+                Serial.print(mqttClientLamp.state());
+                Serial.println(" try again later");
+            }
         }
     }
 }
@@ -490,12 +555,17 @@ void setup() {
     if (mqtt_integration_enabled) {
         if (mqtt_server != "") {
             mqttClient.setServer(mqtt_server.c_str(), mqtt_port);
-            // Optional: Callback für eingehende Nachrichten setzen
             mqttClient.setCallback(mqttCallback);
-            Serial.println("MQTT Server configured.");
+            Serial.println("Internal MQTT Server configured.");
         } else {
-             Serial.println("WARNING: MQTT Server not configured in config.txt, disabling MQTT.");
+             Serial.println("WARNING: Internal MQTT Server not configured in config.txt, disabling MQTT.");
              mqtt_integration_enabled = false; // Deaktivieren wenn Server fehlt
+        }
+
+        if (friendlamp_enabled && friendlamp_mqtt_server != "") {
+            mqttClientLamp.setServer(friendlamp_mqtt_server.c_str(), friendlamp_mqtt_port);
+            mqttClientLamp.setCallback(mqttLampCallback);
+            Serial.println("Friendship Lamp MQTT Server configured.");
         }
     }
 
@@ -551,10 +621,15 @@ void setup() {
 void loop() {
     // --- MQTT Verbindungs-Handling ---
     if (mqtt_integration_enabled && WiFi.status() == WL_CONNECTED) {
-        if (!mqttClient.connected()) {
-            mqtt_reconnect(); // Versuche zu verbinden/wiederzuverbinden
+        // Versuche zu verbinden/wiederzuverbinden (beide Broker)
+        mqtt_reconnect(); 
+        
+        if (mqttClient.connected()) {
+            mqttClient.loop(); // Interner MQTT Client am Leben halten
         }
-        mqttClient.loop(); // MQTT Client am Leben halten
+        if (friendlamp_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
+            mqttClientLamp.loop(); // Lampen MQTT Client am Leben halten
+        }
     } else if (mqtt_integration_enabled && WiFi.status() != WL_CONNECTED) {
         // Optional: WLAN Reconnect versuchen, wenn Verbindung verloren geht
         // setup_wifi(); // Vorsicht: Kann blockieren
@@ -588,7 +663,7 @@ void loop() {
             // Freundschaftslampe: Sende Signal und leuchte auf
             if (friendlamp_enabled) {
                 String payload = mqtt_client_id + ":" + friendlamp_color;
-                publishMqtt(friendlamp_topic, payload, false);
+                publishMqttLamp(friendlamp_topic, payload, false);
                 currentLedColor = strtol(friendlamp_color.c_str(), NULL, 16);
                 ledTimeout = millis() + 60000; // 1 Minute
                 ledActive = true;
@@ -655,7 +730,7 @@ void loop() {
             Serial.flush();
              // Kurze Wartezeit, damit MQTT-Nachricht Zeit hat, gesendet zu werden
              unsigned long mqttSentTime = millis();
-             while(mqttClient.loop() && (millis() - mqttSentTime < 100)) { delay(10); } // Max 100ms warten
+             while((mqttClient.loop() || (friendlamp_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.loop())) && (millis() - mqttSentTime < 100)) { delay(10); } // Max 100ms warten
 
             audio.stopSong();
 
