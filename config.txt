@@ -18,7 +18,7 @@ WIFI_PASS=DeinWLANPasswort
 
 # --- 3. MQTT Broker Einstellungen ---
 # Gib hier die IP-Adresse deines MQTT Brokers (z.B. Raspberry Pi / Home Assistant) ein.
-MQTT_SERVER=192.168.1.100
+MQTT_SERVER=DeinMQTTServer
 MQTT_PORT=1883
 
 # (Optional) Benutzername und Passwort für den MQTT Broker. 
@@ -28,11 +28,11 @@ MQTT_PASS=mqtt_passwort
 
 # --- 4. MQTT Topics und Client-Namen ---
 # ID des Players im Netzwerk
-MQTT_CLIENT_ID=ESP32_AudioPlayer
+MQTT_CLIENT_ID=DeineIDdesGeraets
 
 # Das Basis-Topic für alle Status-Meldungen 
 # (z. B. audioplayer/status, audioplayer/playing, audioplayer/volume)
-MQTT_BASE_TOPIC=zwitscherbox
+MQTT_BASE_TOPIC=InternesBaseTopic
 
 # --- 5. Freundschaftslampe (RGB LED Ring) ---
 # Schaltet die LED-Ring-Funktion an (1) oder aus (0)
@@ -43,7 +43,7 @@ FRIENDLAMP_ENABLE=1
 FRIENDLAMP_COLOR=0000FF
 
 # Topic über das die Lampen kommunizieren (muss auf beiden Boxen gleich sein!)
-FRIENDLAMP_TOPIC=zwitscherbox/friendlamp
+FRIENDLAMP_TOPIC=irgendwaskryptisches/undnochwas
 
 # --- Öffentlicher Broker für die Freundschaftslampe ---
 # Wenn diese Felder leer bleiben, wird automatisch der interne Broker verwendet.
