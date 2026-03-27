@@ -32,7 +32,7 @@ MQTT_CLIENT_ID=ESP32_AudioPlayer
 
 # Das Basis-Topic für alle Status-Meldungen 
 # (z. B. audioplayer/status, audioplayer/playing, audioplayer/volume)
-MQTT_BASE_TOPIC=audioplayer
+MQTT_BASE_TOPIC=zwitscherbox
 
 # --- 5. Freundschaftslampe (RGB LED Ring) ---
 # Schaltet die LED-Ring-Funktion an (1) oder aus (0)
@@ -43,11 +43,13 @@ FRIENDLAMP_ENABLE=1
 FRIENDLAMP_COLOR=0000FF
 
 # Topic über das die Lampen kommunizieren (muss auf beiden Boxen gleich sein!)
-FRIENDLAMP_TOPIC=audioplayer/friendlamp
+FRIENDLAMP_TOPIC=zwitscherbox/friendlamp
 
 # --- Öffentlicher Broker für die Freundschaftslampe ---
 # Wenn diese Felder leer bleiben, wird automatisch der interne Broker verwendet.
-FRIENDLAMP_MQTT_SERVER=broker.hivemq.com
+FRIENDLAMP_MQTT_SERVER=test.mosquitto.org
+# FRIENDLAMP_MQTT_SERVER=test.hivemq.com
+# FRIENDLAMP_MQTT_SERVER=broker.hivemq.com
 FRIENDLAMP_MQTT_PORT=1883
 FRIENDLAMP_MQTT_USER=
 FRIENDLAMP_MQTT_PASS=

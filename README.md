@@ -101,3 +101,26 @@ Bei aktiver MQTT-Verbindung veröffentlicht der Aufbau auf folgenden Topics (bas
 ## 📄 Lizenz
 
 Dieses Projekt wurde exklusiv als Private/Open-Source-Lösung entwickelt. 
+
+## 🐞 Fehlerbehebung (Troubleshooting)
+
+### Build-Fehler: "not able to power down in light sleep"
+
+Beim Kompilieren des Projekts kann es zu folgender Fehlermeldung kommen, die typischerweise bei der Initialisierung des NeoPixel-LED-Rings auftritt:
+
+```
+E (3637) rmt: rmt_new_tx_channel(269): not able to power down in light sleep
+[  3664][E][esp32-hal-rmt.c:548] rmtInit(): GPIO 16 - RMT TX Initialization error.
+```
+
+- **Ursache:** Dieser Fehler wird durch einen Bug in älteren Versionen des ESP32-Frameworks (Arduino Core) für PlatformIO verursacht. Der RMT-Peripherie-Treiber, der von der NeoPixel-Bibliothek verwendet wird, hat ein Kompatibilitätsproblem mit den Energiesparmodi des ESP32.
+
+- **Lösung:** Um dies zu beheben, wurde die `platformio.ini`-Datei angepasst. Die `platform`-Einstellung wurde auf ein spezifisches Git-Repository gesetzt, das eine neuere Version des Frameworks enthält, die diesen Fehler behebt und gleichzeitig die notwendigen Board-Definitionen für das YB-ESP32-S3-AMP-Board bereitstellt.
+
+Die relevante Zeile in `platformio.ini` lautet:
+```ini
+[env]
+platform = https://github.com/pioarduino/platform-espressif32.git
+```
+
+Diese Änderung stellt sicher, dass das Projekt mit einer kompatiblen und fehlerbereinigten Version des ESP32-Frameworks erstellt wird.

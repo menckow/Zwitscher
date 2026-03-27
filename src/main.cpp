@@ -16,6 +16,10 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <Adafruit_NeoPixel.h>
+#include "freertos/semphr.h" // For Mutex
+
+SemaphoreHandle_t neoPixelMutex;
+
 // ------------------------------------
 
 #define MAX_PATH_DEPTH 1
@@ -25,7 +29,7 @@ const int POT_PIN = 4;
 const int PIR_PIN = 18;
 const int SD_CS_PIN = SS;
 const int BUTTON_PIN = 17; //38
-const int LED_PIN = 14;
+const int LED_PIN = 16;
 const int LED_COUNT = 16;
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -277,27 +281,38 @@ void publishMqttLamp(const String& topic, const String& payload, bool retain = f
 
 // --- MQTT Callbacks ---
 void handleLampMessage(char* topic, byte* payload, unsigned int length) {
+    Serial.println("--> handleLampMessage: Function called!");
     String message = "";
     for (int i = 0; i < length; i++) {
         message += (char)payload[i];
     }
     Serial.printf("Friendlamp MQTT Received [%s]: %s\n", topic, message.c_str());
 
+    Serial.printf("--> handleLampMessage: Received message on topic '%s'\n", topic);
     if (friendlamp_enabled && String(topic) == friendlamp_topic) {
+        Serial.println("--> handleLampMessage: Topic matches friendlamp_topic!");
         // Erwartetes Format: "ClientID:ColorHEX" (z.B. "Box2:FF0000")
         int separatorPos = message.indexOf(':');
         if (separatorPos != -1) {
             String senderId = message.substring(0, separatorPos);
             String colorStr = message.substring(separatorPos + 1);
             
+            Serial.println("--> handleLampMessage: Sender ID is '" + senderId + "', my ID is '" + mqtt_client_id + "'");
             // Reagiere nicht auf die eigene Nachricht
             if (senderId != mqtt_client_id) {
+                Serial.println("--> handleLampMessage: Sender ID is different, proceeding to light up LED.");
                 currentLedColor = strtol(colorStr.c_str(), NULL, 16);
-                ledTimeout = millis() + 60000; // 1 Minute leuchten
+                ledTimeout = millis() + 30000; // 30 Sekunden leuchten
                 ledActive = true;
                 if (friendlamp_enabled) {
-                    for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
-                    strip.show();
+                    if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+                        Serial.println("--> handleLampMessage: Mutex taken. Setting pixel colors and calling show().");
+                        for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
+                        strip.show();
+                        xSemaphoreGive(neoPixelMutex);
+                    } else {
+                        Serial.println("Could not get neoPixelMutex in handleLampMessage");
+                    }
                 }
                 Serial.printf("Friendship Lamp: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
             }
@@ -362,6 +377,7 @@ void mqtt_reconnect() {
 
             if (connected) {
                 Serial.println("connected");
+                Serial.println("--> LAMP MQTT: Subscribing to topic: " + friendlamp_topic);
                 mqttClientLamp.subscribe(friendlamp_topic.c_str());
             } else {
                 Serial.print("failed, rc=");
@@ -540,6 +556,7 @@ void checkButton() {
 }
 // --- Setup --- 
 void setup() {
+    neoPixelMutex = xSemaphoreCreateMutex();
     pinMode(LED_BUILTIN, OUTPUT); digitalWrite(LED_BUILTIN, LOW);
     pinMode(POT_PIN, INPUT);
     pinMode(PIR_PIN, INPUT);
@@ -679,11 +696,6 @@ void loop() {
             if (friendlamp_enabled) {
                 String payload = mqtt_client_id + ":" + friendlamp_color;
                 publishMqttLamp(friendlamp_topic, payload, false);
-                currentLedColor = strtol(friendlamp_color.c_str(), NULL, 16);
-                ledTimeout = millis() + 60000; // 1 Minute
-                ledActive = true;
-                for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
-                strip.show();
                 Serial.println("Friendship Lamp: Sent color " + friendlamp_color);
             }
 
@@ -749,8 +761,13 @@ void loop() {
             // LEDs ausschalten, damit sie im Standby nicht dauerhaft leuchten,
             // sie können aber bei MQTT-Empfang wieder aktiviert werden.
             if (friendlamp_enabled) {
-                strip.clear();
-                strip.show();
+                if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+                    strip.clear();
+                    strip.show();
+                    xSemaphoreGive(neoPixelMutex);
+                } else {
+                    Serial.println("Could not get neoPixelMutex in Standby handler");
+                }
             }
 
             // Setzen des Standby-Flags
@@ -762,8 +779,13 @@ void loop() {
         if (ledActive) {
             if (millis() > ledTimeout) {
                 ledActive = false;
-                strip.clear();
-                strip.show();
+                if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+                    strip.clear();
+                    strip.show();
+                    xSemaphoreGive(neoPixelMutex);
+                } else {
+                    Serial.println("Could not get neoPixelMutex in LED timeout handler");
+                }
             }
         }
     }
