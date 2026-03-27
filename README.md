@@ -10,10 +10,10 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
 - **Hardwaresteuerung:**
   - **Potentiometer** zur flüssigen und geglätteten Lautstärkeregelung.
   - **Taster** inklusive Entprellung (Debounce) zum Wechseln der Verzeichnisse.
-- **Energieeffizienz & NVS (Deep Sleep):**
-  - Bei 5 Minuten Inaktivität geht der ESP32 automatisch in den stromsparenden **Deep-Sleep-Modus**.
-  - Wacht beim Auslösen des PIR-Sensors automatisch wieder auf.
-  - Das aktuelle Verzeichnis und die Lautstärke werden ausfallsicher im **NVS (Non-Volatile Storage)** gespeichert und stehen nach dem Aufwachen direkt wieder zur Verfügung.
+- **Standby-Modus & NVS:**
+  - Bei 5 Minuten Inaktivität geht der ESP32 automatisch in einen **Standby-Modus**. Die Audiowiedergabe stoppt und der LED-Ring wird dunkel geschaltet, aber WLAN und MQTT bleiben aktiv (wichtig für die passive Empfängerfunktion der Freundschaftslampe).
+  - Wacht beim Auslösen des PIR-Sensors oder per Tasterdruck intern auf.
+  - Das aktuelle Verzeichnis und die Lautstärke werden ausfallsicher im **NVS (Non-Volatile Storage)** gespeichert.
 - **Freundschaftslampe (RGB LED Ring):**
   - Ein an Pin 12 angeschlossener LED-Ring leuchtet in deiner eigenen (in `config.txt` festgelegten) Farbe auf, wenn der PIR-Sensor auslöst.
   - Optional wird dieses Farbsignal über MQTT an eine zweite Box gesendet, die dann in deiner Farbe leuchtet. (Hierfür kann auf Wunsch ein unabhängiger öffentlicher Broker, getrennt vom Smart-Home-Broker, konfiguriert werden).
@@ -90,7 +90,7 @@ Dieses Projekt verwendet **PlatformIO**.
 
 Bei aktiver MQTT-Verbindung veröffentlicht der Aufbau auf folgenden Topics (basierend auf `MQTT_BASE_TOPIC`, z.B. `audioplayer`):
 
-* `audioplayer/status`: Statusnachrichten ("Online", "Playing Intro", "Entering Deep Sleep", etc.)
+* `audioplayer/status`: Statusnachrichten ("Online", "Playing Intro", "Entering Standby", "Woke up from Standby", etc.)
 * `audioplayer/volume`: Aktuelle Lautstärke.
 * `audioplayer/directory`: Der Pfad zum frisch ausgewählten Verzeichnis auf der SD-Karte.
 * `audioplayer/playing`: Der Pfad der aktuell abgespielten MP3-Datei oder "STOPPED".

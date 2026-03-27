@@ -95,6 +95,7 @@ bool playing = false;
 bool inPlaybackSession = false;
 bool playingIntro = false;
 unsigned long playbackStartTime = 0;
+bool isStandby = false; // Verhindert mehrfaches Ausführen der Standby-Aktion
 
 unsigned long lastPotReadTime = 0;
 const unsigned long potReadInterval = 100;
@@ -491,6 +492,11 @@ void checkButton() {
             buttonState = reading;
             if (buttonState == LOW) {
                 lastPirActivityTime = millis();
+                if (isStandby) {
+                    isStandby = false;
+                    Serial.println("Woke up from Standby (Button)");
+                    publishMqtt(mqtt_topic_status, "Woke up from Standby");
+                }
                 Serial.println("\n--- Button pressed! Changing directory ---");
                 publishMqtt(mqtt_topic_status, "Button Pressed"); // Status senden
                 if (playing || playingIntro || inPlaybackSession) {
@@ -657,6 +663,11 @@ void loop() {
     if (!inPlaybackSession && !playingIntro) {
          if (pirStateHigh) {
             lastPirActivityTime = millis();
+            if (isStandby) {
+                isStandby = false;
+                Serial.println("Woke up from Standby (PIR)");
+                publishMqtt(mqtt_topic_status, "Woke up from Standby");
+            }
             Serial.println("\n+++ PIR TRIGGER +++");
             publishMqtt(mqtt_topic_status, "PIR Triggered"); // Status senden
 
@@ -714,28 +725,30 @@ void loop() {
     }
 
 
-    // --- Deep Sleep Check --- 
-    if (!playing && !playingIntro && !inPlaybackSession) {
+    // --- Standby Check (Ersetzt Deep Sleep) --- 
+    if (!playing && !playingIntro && !inPlaybackSession && !isStandby) {
         unsigned long inactivityDuration = millis() - lastPirActivityTime;
         if (inactivityDuration >= deepSleepInactivityTimeout) {
             preferences.begin("appState", false);
-           // preferences.putInt("dirIndex", currentDirectoryIndex); //wird bereits beim Verzeichniswechsel gemacht
             preferences.putInt("volume", lastVolume);
             preferences.end();
             Serial.printf("\n--- Saved state to NVS: DirIndex=%d, Volume=%d ---\n", currentDirectoryIndex, lastVolume);
 
-            Serial.println("--- inactivity detected. Entering deep sleep. ---");
-            publishMqtt(mqtt_topic_status, "Entering Deep Sleep", true); // Letzten Status senden (retained)
-            Serial.println("Will wake up when PIR pin goes HIGH.");
-            Serial.flush();
-             // Kurze Wartezeit, damit MQTT-Nachricht Zeit hat, gesendet zu werden
-             unsigned long mqttSentTime = millis();
-             while((mqttClient.loop() || (friendlamp_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.loop())) && (millis() - mqttSentTime < 100)) { delay(10); } // Max 100ms warten
-
+            Serial.println("--- Inactivity detected. Entering Standby Mode. ---");
+            publishMqtt(mqtt_topic_status, "Entering Standby", true); // Letzten Status senden (retained)
+            Serial.println("WLAN & MQTT remain active. Awaiting PIR or MQTT messages.");
+            
             audio.stopSong();
 
-            esp_sleep_enable_ext0_wakeup((gpio_num_t)PIR_PIN, 1);
-            esp_deep_sleep_start();
+            // LEDs ausschalten, damit sie im Standby nicht dauerhaft leuchten,
+            // sie können aber bei MQTT-Empfang wieder aktiviert werden.
+            if (friendlamp_enabled) {
+                strip.clear();
+                strip.show();
+            }
+
+            // Setzen des Standby-Flags
+            isStandby = true;
         }
     }
 
