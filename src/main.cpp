@@ -25,7 +25,7 @@ const int POT_PIN = 4;
 const int PIR_PIN = 18;
 const int SD_CS_PIN = SS;
 const int BUTTON_PIN = 17; //38
-const int LED_PIN = 12;
+const int LED_PIN = 14;
 const int LED_COUNT = 16;
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -295,6 +295,10 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                 currentLedColor = strtol(colorStr.c_str(), NULL, 16);
                 ledTimeout = millis() + 60000; // 1 Minute leuchten
                 ledActive = true;
+                if (friendlamp_enabled) {
+                    for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
+                    strip.show();
+                }
                 Serial.printf("Friendship Lamp: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
             }
         }
@@ -678,6 +682,8 @@ void loop() {
                 currentLedColor = strtol(friendlamp_color.c_str(), NULL, 16);
                 ledTimeout = millis() + 60000; // 1 Minute
                 ledActive = true;
+                for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
+                strip.show();
                 Serial.println("Friendship Lamp: Sent color " + friendlamp_color);
             }
 
@@ -757,9 +763,6 @@ void loop() {
             if (millis() > ledTimeout) {
                 ledActive = false;
                 strip.clear();
-                strip.show();
-            } else {
-                for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
                 strip.show();
             }
         }
