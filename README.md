@@ -1,12 +1,21 @@
 # Zwitscher - Directory-Based Random MP3 Player 🎵
 
-Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-ESP32-S3-AMP)** Controllers. Das Projekt nutzt einen SD-Kartenleser, einen PIR-Bewegungssensor, einen Hardware-Taster zur Verzeichnisauswahl, ein Potentiometer zur Lautstärkeregelung sowie optionale **MQTT- und WiFi-Integration** (z. B. zur Anbindung an Smart-Home-Systeme).
+Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-ESP32-S3-AMP)** Controllers.
 
-## 🌟 Features
+### ✨ Kernfunktionen im Überblick
+- **Verzeichnisbasierte Wiedergabe** mit Intro-Sound pro Ordner.
+- **PIR-Sensor** startet zufällige MP3-Wiedergabe bei Bewegung.
+- **Hardware-Steuerung** für Lautstärke (Poti) und Ordnerwechsel (Taster).
+- **Freundschaftslampen-Funktion:** Leuchtet auf, wenn eine *andere* Box eine Bewegung erkennt.
+- **Zwei getrennte MQTT-Integrationen** für Smart Home (z.B. Home Assistant) und die Freundschaftslampen-Funktion.
+- **Konfigurierbare LED-Effekte** (Helligkeit, Fade-Dauer).
+- **NVS-Speicher** für Lautstärke und letzten Ordner, um den Zustand nach Standby beizubehalten.
+
+## 🌟 Detaillierte Features
 
 - **Verzeichnisbasierte Wiedergabe:** MP3s werden in Ordnern auf der SD-Karte organisiert. Über einen Taster lässt sich zwischen den Verzeichnissen wechseln.
 - **Intro-Sound:** Beim Ordnerwechsel wird automatisch eine `intro.mp3` aus dem neuen Verzeichnis abgespielt (falls vorhanden).
-- **Bewegungsmelder (PIR):** Erkennt Bewegung und spielt anschließend zufällig eine MP3-Datei aus dem aktuellen Verzeichnis ab.
+- **Bewegungsmelder (PIR):** Erkennt Bewegung und spielt anschließend zufällig eine MP3-Datei aus dem aktuellen Verzeichnis ab. Löst außerdem das Senden eines MQTT-Signals für die Freundschaftslampe aus.
 - **Hardwaresteuerung:**
   - **Potentiometer** zur flüssigen und geglätteten Lautstärkeregelung.
   - **Taster** inklusive Entprellung (Debounce) zum Wechseln der Verzeichnisse.
@@ -15,10 +24,13 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
   - Wacht beim Auslösen des PIR-Sensors oder per Tasterdruck intern auf.
   - Das aktuelle Verzeichnis und die Lautstärke werden ausfallsicher im **NVS (Non-Volatile Storage)** gespeichert.
 - **Freundschaftslampe (RGB LED Ring):**
-  - Ein an Pin 12 angeschlossener LED-Ring leuchtet in deiner eigenen (in `config.txt` festgelegten) Farbe auf, wenn der PIR-Sensor auslöst.
-  - Optional wird dieses Farbsignal über MQTT an eine zweite Box gesendet, die dann in deiner Farbe leuchtet. (Hierfür kann auf Wunsch ein unabhängiger öffentlicher Broker, getrennt vom Smart-Home-Broker, konfiguriert werden).
+  - **KORREKTUR:** Wenn eine *andere* Box eine Bewegung erkennt und ein MQTT-Signal sendet, leuchtet der eigene LED-Ring in der Farbe des Senders auf. Das Auslösen des *eigenen* PIR-Sensors führt **nicht** zum Leuchten der eigenen Lampe, sondern sendet nur ein Signal an die anderen.
+  - Die LEDs blenden mit einem sanften **Fade-Effekt** ein und aus. Dauer und Helligkeit sind in der `config.txt` einstellbar.
 - **Smart-Home / MQTT Integration:**
-  - Optional konfigurierbar über eine `config.txt` auf der SD-Karte.
+  - Die MQTT-Funktionalität ist aufgeteilt:
+    - Eine Integration für **Statusmeldungen** an einen internen Broker (z.B. Home Assistant).
+    - Eine separate Integration für die **Freundschaftslampen-Funktion**, die auch einen öffentlichen Broker nutzen kann.
+    - Beide können unabhängig voneinander aktiviert werden. Das Gerät bleibt komplett offline, wenn beide deaktiviert sind.
   - Verbindet sich über WiFi und schickt Echtzeit-Statusupdates über MQTT (Lautstärke, Wiedergabestatus, Fehler, aktuelle IP).
 - **Timeouts:** Maximale Wiedergabedauer für eine Random-Session ist auf 5 Minuten limitiert um Endlos-Wiedergabe zu vermeiden.
 
@@ -29,7 +41,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
 - **PIR Sensor:** Angeschlossen an `Pin 18`
 - **Taster:** Angeschlossen an `Pin 17` (Pull-up intern konfiguriert)
 - **Potentiometer:** Angeschlossen an `Pin 4`
-- **RGB LED Ring (NeoPixel):** Datenleitung angeschlossen an `Pin 12`
+- **RGB LED Ring (NeoPixel):** Datenleitung angeschlossen an `Pin 16`
 - **I2S Audio:** Auspins für I2S Konfiguration (in Audiobibliothek integriert).
 
 ## 🗂 Ordnerstruktur auf der SD-Karte
@@ -51,12 +63,26 @@ Die SD-Karte sollte wie folgt strukturiert sein:
 
 ## ⚙️ Konfiguration (`config.txt`)
 
-Um MQTT und WLAN zu nutzen, erstelle eine `config.txt` im Hauptverzeichnis (Root) der SD-Karte mit folgendem Inhalt (Beispiel):
+Um MQTT und WLAN zu nutzen, erstelle eine `config.txt` im Hauptverzeichnis (Root) der SD-Karte. Hier ein Beispiel mit allen neuen Optionen:
 
 ```ini
+# --- 1. MQTT-Aktivierung ---
+# Setze diesen Wert auf 1, um die Status-Übermittlung an deinen internen
+# MQTT Broker (z.B. Home Assistant) zu aktivieren.
 MQTT_INTEGRATION=1
+
+# Setze diesen Wert auf 1, um die Freundschaftslampen-Funktion über MQTT
+# zu aktivieren. Dies kann der interne oder ein öffentlicher Broker sein.
+FRIENDLAMP_MQTT_INTEGRATION=1
+
+# Hinweis: Wenn beide obigen Werte auf 0 stehen, bleibt das Gerät offline (kein WLAN).
+
+# --- 2. WLAN (WiFi) Einstellungen ---
+# Erforderlich, wenn eine der MQTT-Integrationen aktiviert ist.
 WIFI_SSID=DeinWLANName
 WIFI_PASS=DeinWLANPasswort
+
+# --- 3. Interner MQTT Broker (für Home Assistant) ---
 MQTT_SERVER=192.168.1.100
 MQTT_PORT=1883
 MQTT_USER=mqtt_benutzer
@@ -64,18 +90,27 @@ MQTT_PASS=mqtt_passwort
 MQTT_CLIENT_ID=ESP32_AudioPlayer
 MQTT_BASE_TOPIC=audioplayer
 
+# --- 5. Freundschaftslampe (RGB LED Ring) ---
+# Schaltet die LED-Ring-Hardware an (1) oder aus (0).
 FRIENDLAMP_ENABLE=1
+# Feste Sende-Farbe für DIESE Box im Hex-Format
 FRIENDLAMP_COLOR=0000FF
+# Topic über das die Lampen kommunizieren
 FRIENDLAMP_TOPIC=audioplayer/friendlamp
 
-# --- Öffentlicher Broker für die Freundschaftslampe ---
+# Steuerung für LED-Effekte
+LED_FADE_EFFECT=1
+LED_FADE_DURATION=1000
+LED_BRIGHTNESS=100
+
+# --- Externer Broker für die Freundschaftslampe (Optional) ---
 # Wenn diese Felder leer bleiben, wird automatisch der interne Broker verwendet.
 FRIENDLAMP_MQTT_SERVER=broker.hivemq.com
 FRIENDLAMP_MQTT_PORT=1883
 FRIENDLAMP_MQTT_USER=
 FRIENDLAMP_MQTT_PASS=
 ```
-Wird die Datei weggelassen oder `MQTT_INTEGRATION=0` gesetzt, läuft der Player komplett offline.
+Wird die Datei weggelassen oder sind beide `_INTEGRATION` Flags auf `0` gesetzt, läuft der Player komplett offline.
 
 ## 🚀 Installation & Kompilierung
 

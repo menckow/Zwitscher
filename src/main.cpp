@@ -52,7 +52,8 @@ String mqtt_user = "";
 String mqtt_pass = "";
 String mqtt_client_id = "ESP32_AudioPlayer"; // Default, falls Laden fehlschlägt
 String mqtt_base_topic = "audioplayer";      // Default, falls Laden fehlschlägt
-bool   mqtt_integration_enabled = false;     // Standardmäßig DEAKTIVIERT
+bool   homeassistant_mqtt_enabled = false; // Für die Statusmeldung an Home Assistant
+bool   friendlamp_mqtt_enabled = false;    // Für die Freundschaftslampen-Funktionalität
 
 // Freundschaftslampe MQTT Variablen (Optionaler 2. Broker)
 String friendlamp_mqtt_server = "";
@@ -62,6 +63,8 @@ String friendlamp_mqtt_pass = "";
 
 // Freundschaftslampe Variablen
 bool   friendlamp_enabled = false;
+bool   led_fade_effect = false;
+int    led_brightness = 100; // Helligkeit (0-255), Standardwert
 String friendlamp_color = "0000FF";
 String friendlamp_topic = "audioplayer/friendlamp";
 unsigned long ledTimeout = 0;
@@ -115,18 +118,109 @@ unsigned long lastPirActivityTime = 0;
 float smoothedPotValue = -1.0; // Initialwert, der eine sofortige Berechnung beim ersten Mal erzwingt
 const float potSmoothingFactor = 0.2; // Glättungsfaktor (0.0 bis 1.0). Kleinere Werte = mehr Glättung, langsamere Reaktion. 0.1 ist ein guter Start.
 
+// --- LED Fade-Effekte ---
+enum FadeState { FADE_NONE, FADE_IN, FADE_OUT };
+FadeState fadeState = FADE_NONE;
+uint32_t fadeColor = 0;
+unsigned long fadeStartTime = 0;
+int fadeDuration = 1000; // 1 second
+
+void startFadeIn(uint32_t color) {
+    if (led_fade_effect) {
+        fadeColor = color;
+        fadeState = FADE_IN;
+        fadeStartTime = millis();
+    } else {
+        if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+            for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, color);
+            strip.show();
+            xSemaphoreGive(neoPixelMutex);
+        }
+    }
+}
+
+void startFadeOut() {
+    if (led_fade_effect) {
+        fadeState = FADE_OUT;
+        fadeStartTime = millis();
+    } else {
+        if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+            strip.clear();
+            strip.show();
+            xSemaphoreGive(neoPixelMutex);
+        }
+    }
+}
+
+void updateFade() {
+    if (fadeState == FADE_NONE) return;
+
+    unsigned long currentTime = millis();
+    float progress = (float)(currentTime - fadeStartTime) / fadeDuration;
+
+    if (progress >= 1.0) {
+        progress = 1.0;
+    }
+
+    if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+        if (fadeState == FADE_IN) {
+            uint8_t r = (fadeColor >> 16) & 0xFF;
+            uint8_t g = (fadeColor >> 8) & 0xFF;
+            uint8_t b = fadeColor & 0xFF;
+
+            uint32_t currentColor = strip.Color((uint8_t)(r * progress), (uint8_t)(g * progress), (uint8_t)(b * progress));
+            for (int i = 0; i < strip.numPixels(); i++) {
+                strip.setPixelColor(i, currentColor);
+            }
+            strip.show();
+        } else if (fadeState == FADE_OUT) {
+            // KORREKTUR: Anstatt die Farbe bei jedem Frame vom Stripe zu lesen (was zu einem nicht-linearen Fade führt),
+            // verwenden wir die 'fadeColor', die während des Fade-Ins gesetzt wurde. Dies sorgt für ein gleichmäßiges Ausblenden.
+            uint8_t r = (fadeColor >> 16) & 0xFF;
+            uint8_t g = (fadeColor >> 8) & 0xFF;
+            uint8_t b = fadeColor & 0xFF;
+
+            uint32_t currentColor = strip.Color((uint8_t)(r * (1.0 - progress)), (uint8_t)(g * (1.0 - progress)), (uint8_t)(b * (1.0 - progress)));
+            for (int i = 0; i < strip.numPixels(); i++) {
+                strip.setPixelColor(i, currentColor);
+            }
+            strip.show();
+        }
+        xSemaphoreGive(neoPixelMutex);
+    }
+
+
+    if (progress == 1.0) {
+        if (fadeState == FADE_OUT) {
+             if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+                strip.clear();
+                strip.show();
+                xSemaphoreGive(neoPixelMutex);
+             }
+        } else if (fadeState == FADE_IN) {
+            // Am Ende des Einblendens sicherstellen, dass die exakte Farbe gesetzt ist.
+            if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+                for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, fadeColor);
+                strip.show();
+                xSemaphoreGive(neoPixelMutex);
+            }
+        }
+        fadeState = FADE_NONE;
+    }
+}
+
 // --- Funktion zum Laden der Konfiguration von SD ---
 void loadConfig() {
     File configFile = SD.open("/config.txt");
     if (!configFile) {
         Serial.println("ERROR: config.txt not found on SD card!");
-        mqtt_integration_enabled = false; // Deaktivieren, wenn Datei fehlt
         return;
     }
 
     Serial.println("Reading config.txt...");
     // Setze Standardwerte für den Fall, dass Keys fehlen
-    mqtt_integration_enabled = false; // Erstmal deaktiviert, muss explizit aktiviert werden
+    homeassistant_mqtt_enabled = false; // Standardmäßig deaktiviert
+    friendlamp_mqtt_enabled = false; // Standardmäßig deaktiviert
     mqtt_client_id = "ESP32_AudioPlayer";
     mqtt_base_topic = "audioplayer";
     mqtt_port = 1883;
@@ -172,11 +266,9 @@ void loadConfig() {
         } else if (key == "MQTT_BASE_TOPIC") {
             mqtt_base_topic = value;
         } else if (key == "MQTT_INTEGRATION") {
-            if (value == "1") {
-                mqtt_integration_enabled = true;
-            } else {
-                mqtt_integration_enabled = false;
-            }
+            homeassistant_mqtt_enabled = (value == "1");
+        } else if (key == "FRIENDLAMP_MQTT_INTEGRATION") {
+            friendlamp_mqtt_enabled = (value == "1");
         } else if (key == "FRIENDLAMP_ENABLE") {
             friendlamp_enabled = (value == "1");
         } else if (key == "FRIENDLAMP_COLOR") {
@@ -192,19 +284,26 @@ void loadConfig() {
             friendlamp_mqtt_user = value;
         } else if (key == "FRIENDLAMP_MQTT_PASS") {
             friendlamp_mqtt_pass = value;
+        } else if (key == "LED_FADE_EFFECT") {
+            led_fade_effect = (value == "1");
+        } else if (key == "LED_FADE_DURATION") {
+            int new_duration = value.toInt();
+            if (new_duration > 0) fadeDuration = new_duration;
+        } else if (key == "LED_BRIGHTNESS") {
+            int new_brightness = value.toInt();
+            if (new_brightness >= 0 && new_brightness <= 255) {
+                led_brightness = new_brightness;
+            }
         }
     }
     configFile.close();
 
-    if (mqtt_integration_enabled) {
-        Serial.println("MQTT Integration: ENABLED");
-        Serial.println("  SSID: " + wifi_ssid);
-        // Serial.println("  Pass: [HIDDEN]"); // Passwort nicht ausgeben
-        Serial.println("  MQTT Server: " + mqtt_server + ":" + String(mqtt_port));
-        Serial.println("  MQTT User: " + mqtt_user);
-        // Serial.println("  MQTT Pass: [HIDDEN]");
-        Serial.println("  MQTT Client ID: " + mqtt_client_id);
-        Serial.println("  MQTT Base Topic: " + mqtt_base_topic);
+    if (homeassistant_mqtt_enabled) {
+        Serial.println("Home Assistant MQTT Integration: ENABLED");
+        Serial.println("  HA-MQTT Server: " + mqtt_server + ":" + String(mqtt_port));
+        Serial.println("  HA-MQTT User: " + mqtt_user);
+        Serial.println("  HA-MQTT Client ID: " + mqtt_client_id);
+        Serial.println("  HA-MQTT Base Topic: " + mqtt_base_topic);
 
         // Dynamische Topics erstellen
         mqtt_topic_status = mqtt_base_topic + "/status";
@@ -215,19 +314,33 @@ void loadConfig() {
         mqtt_topic_playing = mqtt_base_topic + "/playing";
         mqtt_topic_ip = mqtt_base_topic + "/ip_address";
     } else {
-         Serial.println("MQTT Integration: DISABLED (config flag not '1' or missing)");
+         Serial.println("Home Assistant MQTT Integration: DISABLED");
+    }
+
+    if (friendlamp_mqtt_enabled) {
+        Serial.println("Friendship Lamp MQTT Integration: ENABLED");
+    } else {
+        Serial.println("Friendship Lamp MQTT Integration: DISABLED");
+    }
+
+    if (!homeassistant_mqtt_enabled && !friendlamp_mqtt_enabled) {
+        Serial.println("All MQTT Integrations disabled. Device will remain offline.");
+    } else {
+        Serial.println("WiFi SSID: " + wifi_ssid);
     }
 }
 
 // --- Funktion zum Aufbau der WLAN-Verbindung ---
 void setup_wifi() {
-    if (!mqtt_integration_enabled) {
-        return; // Integration nicht aktiviert
+    if (!homeassistant_mqtt_enabled && !friendlamp_mqtt_enabled) {
+        return; // Keine Integration aktiviert, kein WLAN benötigt
     }
 
     if (wifi_ssid == "") {
-        Serial.println("ERROR: WiFi SSID not configured in config.txt!");
-        mqtt_integration_enabled = false; // Deaktivieren, wenn SSID fehlt
+        Serial.println("ERROR: WiFi SSID not configured in config.txt for active MQTT integration!");
+        // Deaktiviere beide, da WLAN nicht konfiguriert ist
+        homeassistant_mqtt_enabled = false; 
+        friendlamp_mqtt_enabled = false;
         return;
     }
 
@@ -245,9 +358,6 @@ void setup_wifi() {
 
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("\nERROR: WiFi connection failed!");
-        // Optional: Hier weitere Versuche oder Fehlermeldung über MQTT (falls Broker erreichbar ist)
-        // Fürs Erste deaktivieren wir MQTT, wenn WLAN fehlschlägt
-        // mqtt_integration_enabled = false; // Oder man lässt es und versucht später erneut zu verbinden
     } else {
         Serial.println("\nWiFi connected!");
         Serial.print("IP address: ");
@@ -257,7 +367,7 @@ void setup_wifi() {
 
 // --- MQTT Hilfsfunktion zum Publizieren ---
 void publishMqtt(const String& topic, const String& payload, bool retain = false) {
-    if (!mqtt_integration_enabled || !mqttClient.connected()) {
+    if (!homeassistant_mqtt_enabled || !mqttClient.connected()) {
         // Nicht senden, wenn deaktiviert oder nicht verbunden
         return;
     }
@@ -265,7 +375,7 @@ void publishMqtt(const String& topic, const String& payload, bool retain = false
 }
 
 void publishMqttLamp(const String& topic, const String& payload, bool retain = false) {
-    if (!friendlamp_enabled || !mqtt_integration_enabled) return;
+    if (!friendlamp_mqtt_enabled || !friendlamp_enabled) return;
     
     // Wenn ein separater Server konfiguriert ist, nutze diesen, ansonsten den internen
     if (friendlamp_mqtt_server != "") {
@@ -273,7 +383,8 @@ void publishMqttLamp(const String& topic, const String& payload, bool retain = f
             mqttClientLamp.publish(topic.c_str(), payload.c_str(), retain);
         }
     } else {
-        if (mqttClient.connected()) {
+        // Nutze den internen Broker, wenn für HA aktiviert
+        if (homeassistant_mqtt_enabled && mqttClient.connected()) {
             mqttClient.publish(topic.c_str(), payload.c_str(), retain);
         }
     }
@@ -305,14 +416,8 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                 ledTimeout = millis() + 30000; // 30 Sekunden leuchten
                 ledActive = true;
                 if (friendlamp_enabled) {
-                    if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
-                        Serial.println("--> handleLampMessage: Mutex taken. Setting pixel colors and calling show().");
-                        for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, currentLedColor);
-                        strip.show();
-                        xSemaphoreGive(neoPixelMutex);
-                    } else {
-                        Serial.println("Could not get neoPixelMutex in handleLampMessage");
-                    }
+                    Serial.println("--> handleLampMessage: Starting Fade-In.");
+                    startFadeIn(currentLedColor);
                 }
                 Serial.printf("Friendship Lamp: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
             }
@@ -321,8 +426,11 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-    // Wird für den internen Broker genutzt
-    handleLampMessage(topic, payload, length);
+    // Wird für den internen Broker genutzt (HA und ggf. Lampe)
+    if (friendlamp_mqtt_enabled) {
+        handleLampMessage(topic, payload, length);
+    }
+    // Hier könnten weitere Callbacks für die HA-Integration hin
 }
 
 void mqttLampCallback(char* topic, byte* payload, unsigned int length) {
@@ -333,10 +441,10 @@ void mqttLampCallback(char* topic, byte* payload, unsigned int length) {
 
 // --- MQTT Wiederverbindungslogik ---
 void mqtt_reconnect() {
-    // --- Wiederverbindung für den internen Broker ---
-    if (!mqttClient.connected() && millis() - lastMqttReconnectAttempt > mqttReconnectInterval) {
+    // --- Wiederverbindung für den internen Broker (Home Assistant) ---
+    if (homeassistant_mqtt_enabled && !mqttClient.connected() && millis() - lastMqttReconnectAttempt > mqttReconnectInterval) {
         lastMqttReconnectAttempt = millis();
-        Serial.print("Attempting Internal MQTT connection...");
+        Serial.print("Attempting Internal (HA) MQTT connection...");
         bool connected = false;
         if (mqtt_user.length() > 0) {
              connected = mqttClient.connect(mqtt_client_id.c_str(), mqtt_user.c_str(), mqtt_pass.c_str());
@@ -348,9 +456,10 @@ void mqtt_reconnect() {
             Serial.println("connected");
             publishMqtt(mqtt_topic_ip, WiFi.localIP().toString(), true);
             publishMqtt(mqtt_topic_status, "Online", true); 
-             // Subscribe auf dem internen Broker nur, wenn kein separater Lampen-Broker konfiguriert ist
-             if (friendlamp_enabled && friendlamp_mqtt_server == "") {
+             // Subscribe auf dem internen Broker für die Lampe, falls diese auch dort läuft
+             if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server == "") {
                  mqttClient.subscribe(friendlamp_topic.c_str());
+                 Serial.println("Subscribed to Friendlamp topic on internal broker.");
              }
         } else {
             Serial.print("failed, rc=");
@@ -360,7 +469,7 @@ void mqtt_reconnect() {
     }
 
     // --- Wiederverbindung für den Freundschaftslampen-Broker (falls konfiguriert) ---
-    if (friendlamp_enabled && friendlamp_mqtt_server != "" && !mqttClientLamp.connected()) {
+    if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server != "" && !mqttClientLamp.connected()) {
         if (millis() - lastLampMqttReconnectAttempt > mqttReconnectInterval) {
             lastLampMqttReconnectAttempt = millis();
             Serial.print("Attempting Lamp MQTT connection...");
@@ -575,33 +684,36 @@ void setup() {
     // --- Konfiguration laden ---
     loadConfig();
 
-    // --- WLAN verbinden (wenn aktiviert) ---
-    setup_wifi();
+    // --- WLAN verbinden (wenn eine der Integrationen aktiviert ist) ---
+    if (homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) {
+        setup_wifi();
+    }
  
-    // --- MQTT Setup (wenn aktiviert) ---
-    if (mqtt_integration_enabled) {
+    // --- MQTT Setup für Home Assistant ---
+    if (homeassistant_mqtt_enabled) {
         if (mqtt_server != "") {
             mqttClient.setServer(mqtt_server.c_str(), mqtt_port);
             mqttClient.setCallback(mqttCallback);
-            Serial.println("Internal MQTT Server configured.");
+            Serial.println("Internal MQTT (Home Assistant) Server configured.");
         } else {
-             Serial.println("WARNING: Internal MQTT Server not configured in config.txt, disabling MQTT.");
-             mqtt_integration_enabled = false; // Deaktivieren wenn Server fehlt
+             Serial.println("WARNING: Internal MQTT Server not configured, disabling HA integration.");
+             homeassistant_mqtt_enabled = false;
         }
+    }
 
-        if (friendlamp_enabled && friendlamp_mqtt_server != "") {
-            mqttClientLamp.setServer(friendlamp_mqtt_server.c_str(), friendlamp_mqtt_port);
-            mqttClientLamp.setCallback(mqttLampCallback);
-            Serial.println("Friendship Lamp MQTT Server configured.");
-        }
+    // --- MQTT Setup für Freundschaftslampe ---
+    if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server != "") {
+        mqttClientLamp.setServer(friendlamp_mqtt_server.c_str(), friendlamp_mqtt_port);
+        mqttClientLamp.setCallback(mqttLampCallback);
+        Serial.println("Friendship Lamp MQTT Server configured.");
     }
 
     // --- LED_Ring Setup ---
     if (friendlamp_enabled) {
         strip.begin();
         strip.show(); // Initialize all pixels to 'off'
-        strip.setBrightness(100); // Set brightness
-        Serial.println("Friendship Lamp (LED Ring) initialized.");
+        strip.setBrightness(led_brightness); // Set brightness from config
+        Serial.println("Friendship Lamp (LED Ring) initialized. Brightness: " + String(led_brightness));
     }
 
     Serial.println("Scanning directories...");
@@ -646,21 +758,20 @@ void setup() {
 
 // --- Loop --- (Speichert Zustand vor Deep Sleep)
 void loop() {
+    updateFade();
     // --- MQTT Verbindungs-Handling ---
-    if (mqtt_integration_enabled && WiFi.status() == WL_CONNECTED) {
+    if ((homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
         // Versuche zu verbinden/wiederzuverbinden (beide Broker)
         mqtt_reconnect(); 
         
-        if (mqttClient.connected()) {
+        if (homeassistant_mqtt_enabled && mqttClient.connected()) {
             mqttClient.loop(); // Interner MQTT Client am Leben halten
         }
-        if (friendlamp_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
+        if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
             mqttClientLamp.loop(); // Lampen MQTT Client am Leben halten
         }
-    } else if (mqtt_integration_enabled && WiFi.status() != WL_CONNECTED) {
+    } else if ((homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) && WiFi.status() != WL_CONNECTED) {
         // Optional: WLAN Reconnect versuchen, wenn Verbindung verloren geht
-        // setup_wifi(); // Vorsicht: Kann blockieren
-        // Besser: Nicht-blockierender Reconnect oder einfach warten
         static unsigned long lastWifiCheck = 0;
         if (millis() - lastWifiCheck > 30000) { // Prüfe alle 30 Sek
             Serial.println("WiFi disconnected. Attempting reconnect...");
@@ -758,16 +869,9 @@ void loop() {
             
             audio.stopSong();
 
-            // LEDs ausschalten, damit sie im Standby nicht dauerhaft leuchten,
-            // sie können aber bei MQTT-Empfang wieder aktiviert werden.
+            // LEDs ausblenden, wenn in den Standby-Modus gewechselt wird
             if (friendlamp_enabled) {
-                if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
-                    strip.clear();
-                    strip.show();
-                    xSemaphoreGive(neoPixelMutex);
-                } else {
-                    Serial.println("Could not get neoPixelMutex in Standby handler");
-                }
+                startFadeOut();
             }
 
             // Setzen des Standby-Flags
@@ -776,17 +880,9 @@ void loop() {
     }
 
     if (friendlamp_enabled) {
-        if (ledActive) {
-            if (millis() > ledTimeout) {
-                ledActive = false;
-                if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
-                    strip.clear();
-                    strip.show();
-                    xSemaphoreGive(neoPixelMutex);
-                } else {
-                    Serial.println("Could not get neoPixelMutex in LED timeout handler");
-                }
-            }
+        if (ledActive && millis() > ledTimeout) {
+            ledActive = false;
+            startFadeOut();
         }
     }
 

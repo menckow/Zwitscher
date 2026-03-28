@@ -3,53 +3,65 @@
 # ------------------------------------------------------------------------
 # 1. Speichere diese Datei direkt in das Hauptverzeichnis (Root) deiner SD-Karte.
 # 2. Passe die Platzhalter (ohne Leerzeichen nach dem "=") an dein Netzwerk an.
-# 3. Wenn du MQTT und WLAN nicht nutzen willst, setze MQTT_INTEGRATION=0 .
 # ------------------------------------------------------------------------
 
-# --- 1. Allgemeine Aktivierung ---
-# Setze diesen Wert auf 1, um WiFi und MQTT zu aktivieren.
-# Setze ihn auf 0 (oder lösche ihn), wenn der Player komplett offline bleiben soll.
+# --- 1. MQTT-Aktivierung ---
+# Setze diesen Wert auf 1, um die Status-Übermittlung an deinen internen
+# MQTT Broker (z.B. Home Assistant) zu aktivieren.
 MQTT_INTEGRATION=0
 
+# Setze diesen Wert auf 1, um die Freundschaftslampen-Funktion über MQTT
+# zu aktivieren. Dies kann der interne oder ein öffentlicher Broker sein.
+FRIENDLAMP_MQTT_INTEGRATION=0
+
+# Hinweis: Wenn beide obigen Werte auf 0 stehen, bleibt das Gerät offline (kein WLAN).
+
 # --- 2. WLAN (WiFi) Einstellungen ---
-# Gib hier den Namen und das Passwort deines WLANs ein.
+# Erforderlich, wenn eine der MQTT-Integrationen aktiviert ist.
 WIFI_SSID=DeinWLANNetzwerkName
 WIFI_PASS=DeinWLANPasswort
 
-# --- 3. MQTT Broker Einstellungen ---
+# --- 3. Interner MQTT Broker (für Home Assistant) ---
 # Gib hier die IP-Adresse deines MQTT Brokers (z.B. Raspberry Pi / Home Assistant) ein.
 MQTT_SERVER=192.168.1.100
 MQTT_PORT=1883
 
-# (Optional) Benutzername und Passwort für den MQTT Broker. 
-# Wenn dein Broker kein Login benötigt, kannst du dies einfach leer lassen.
+# (Optional) Benutzername und Passwort für den internen MQTT Broker. 
 MQTT_USER=mqtt_benutzer
 MQTT_PASS=mqtt_passwort
 
 # --- 4. MQTT Topics und Client-Namen ---
-# ID des Players im Netzwerk
+# Eindeutige ID des Players im Netzwerk
 MQTT_CLIENT_ID=ESP32_AudioPlayer
 
-# Das Basis-Topic für alle Status-Meldungen 
+# Das Basis-Topic für alle Status-Meldungen an Home Assistant
 # (z. B. audioplayer/status, audioplayer/playing, audioplayer/volume)
 MQTT_BASE_TOPIC=zwitscherbox
 
 # --- 5. Freundschaftslampe (RGB LED Ring) ---
-# Schaltet die LED-Ring-Funktion an (1) oder aus (0)
+# Schaltet die LED-Ring-Hardware an (1) oder aus (0).
+# FRIENDLAMP_MQTT_INTEGRATION muss ebenfalls auf 1 sein, damit dies funktioniert.
 FRIENDLAMP_ENABLE=1
 
 # Feste Sende-Farbe für DIESE Box im Hex-Format (z. B. FF0000 = Rot, 00FF00 = Grün, 0000FF = Blau)
-# Wenn der Bewegungsmelder (PIR) auslöst, wird diese Farbe gesendet.
 FRIENDLAMP_COLOR=0000FF
 
-# Topic über das die Lampen kommunizieren (muss auf beiden Boxen gleich sein!)
+# Topic über das die Lampen kommunizieren (muss auf allen Boxen gleich sein!)
 FRIENDLAMP_TOPIC=zwitscherbox/friendlamp
 
-# --- Öffentlicher Broker für die Freundschaftslampe ---
-# Wenn diese Felder leer bleiben, wird automatisch der interne Broker verwendet.
+# Aktiviert den Fade-Effekt für die LEDs (1 = an, 0 = aus)
+LED_FADE_EFFECT=1
+
+# Dauer für das Ein- und Ausblenden in Millisekunden (z.B. 1000 = 1 Sekunde)
+LED_FADE_DURATION=1000
+
+# Helligkeit des LED-Rings (Werte von 0 bis 255)
+LED_BRIGHTNESS=100
+
+# --- Externer Broker für die Freundschaftslampe (Optional) ---
+# Wenn diese Felder leer bleiben, wird automatisch der interne Broker verwendet
+# (falls MQTT_INTEGRATION=1 gesetzt ist).
 FRIENDLAMP_MQTT_SERVER=test.mosquitto.org
-# FRIENDLAMP_MQTT_SERVER=test.hivemq.com
-# FRIENDLAMP_MQTT_SERVER=broker.hivemq.com
 FRIENDLAMP_MQTT_PORT=1883
 FRIENDLAMP_MQTT_USER=
 FRIENDLAMP_MQTT_PASS=
