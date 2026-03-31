@@ -10,6 +10,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
 - **Zwei getrennte MQTT-Integrationen** für Smart Home (z.B. Home Assistant) und die Freundschaftslampen-Funktion.
 - **Konfigurierbare LED-Effekte** (Helligkeit, Fade-Dauer).
 - **NVS-Speicher** für Lautstärke und letzten Ordner, um den Zustand nach Standby beizubehalten.
+- **Integriertes Web-Portal** zur einfachen Konfiguration bei Verbindungsproblemen.
 
 ## 🌟 Detaillierte Features
 
@@ -33,6 +34,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
     - Beide können unabhängig voneinander aktiviert werden. Das Gerät bleibt komplett offline, wenn beide deaktiviert sind.
   - Verbindet sich über WiFi und schickt Echtzeit-Statusupdates über MQTT (Lautstärke, Wiedergabestatus, Fehler, aktuelle IP).
 - **Timeouts:** Maximale Wiedergabedauer für eine Random-Session ist auf 5 Minuten limitiert um Endlos-Wiedergabe zu vermeiden.
+- **Web-Konfigurationsportal:** Wenn keine gültige WLAN-Verbindung hergestellt werden kann, startet das Gerät einen eigenen Access Point (`Zwitscherbox`). Über eine Weboberfläche können alle Einstellungen bequem konfiguriert werden, ohne die SD-Karte manuell bearbeiten zu müssen.
 
 ## 🛠 Hardware-Anforderungen
 
@@ -109,6 +111,13 @@ FRIENDLAMP_MQTT_SERVER=broker.hivemq.com
 FRIENDLAMP_MQTT_PORT=1883
 FRIENDLAMP_MQTT_USER=
 FRIENDLAMP_MQTT_PASS=
+
+# TLS-Verschlüsselung (nur für den externen Friendlamp Broker relevant)
+# Setze auf 1, um die Verbindung zum Friendlamp-Broker zu verschlüsseln (Port meist 8883).
+# Der interne Home Assistant Broker bleibt davon unberührt und unverschlüsselt.
+FRIENDLAMP_MQTT_TLS_ENABLED=0
+
+# Wenn TLS aktiviert wird, muss in der config.txt das Root-Zertifikat (BEGIN_CERT...END_CERT) eingefügt werden.
 ```
 Wird die Datei weggelassen oder sind beide `_INTEGRATION` Flags auf `0` gesetzt, läuft der Player komplett offline.
 

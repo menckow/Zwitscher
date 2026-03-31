@@ -15,10 +15,19 @@
 #include <Preferences.h> 
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <Adafruit_NeoPixel.h>
-#include "freertos/semphr.h" // For Mutex
+#include <ESPAsyncWebServer.h> // For Webserver
+#include <AsyncTCP.h>          // For Webserver
+#include <DNSServer.h>         // For Captive Portal
+#include "freertos/semphr.h" // For Mutext_NeoPixel.h>
 
 SemaphoreHandle_t neoPixelMutex;
+
+// --- Webserver Objects ---
+AsyncWebServer server(80);
+DNSServer dns;
+bool apMode = false; // Flag to indicate if we are in AP mode
 
 // ------------------------------------
 
@@ -55,6 +64,10 @@ String mqtt_base_topic = "audioplayer";      // Default, falls Laden fehlschläg
 bool   homeassistant_mqtt_enabled = false; // Für die Statusmeldung an Home Assistant
 bool   friendlamp_mqtt_enabled = false;    // Für die Freundschaftslampen-Funktionalität
 
+// NEU: TLS Variablen
+bool   friendlamp_mqtt_tls_enabled = false;
+String mqtt_root_ca_content = "";
+
 // Freundschaftslampe MQTT Variablen (Optionaler 2. Broker)
 String friendlamp_mqtt_server = "";
 int    friendlamp_mqtt_port = 1883;
@@ -87,6 +100,7 @@ unsigned long lastMqttReconnectAttempt = 0;
 
 // MQTT Client Objekte (Freundschaftslampe Broker)
 WiFiClient espClientLamp;
+WiFiClientSecure espClientSecureLamp; // NEU für TLS
 PubSubClient mqttClientLamp(espClientLamp);
 unsigned long lastLampMqttReconnectAttempt = 0;
 
@@ -210,6 +224,243 @@ void updateFade() {
 }
 
 // --- Funktion zum Laden der Konfiguration von SD ---
+
+// --- Webserver & Config Portal ---
+const char* DEFAULT_ROOT_CA = \
+"-----BEGIN CERTIFICATE-----\n"
+"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\n"
+"-----END CERTIFICATE-----\n";
+
+String getHtmlPage() {
+    String page = "<html><head><title>Zwitscherbox Konfiguration</title>";
+    page += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
+    page += "<meta charset='UTF-8'><style>";
+    
+    // Modernes CSS
+    page += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f0f2f5;color:#1c1e21;margin:0;padding:20px;}";
+    page += "h1{text-align:center;color:#2e7d32;margin-bottom:30px;font-weight:300;}";
+    page += "form{max-width:600px;margin:0 auto;}";
+    page += ".card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 4px rgba(0,0,0,0.1);margin-bottom:20px;}";
+    page += "h2{font-size:1.2rem;color:#2e7d32;margin-top:0;border-bottom:2px solid #e8f5e9;padding-bottom:10px;margin-bottom:20px;}";
+    page += ".field{margin-bottom:15px;}";
+    page += "label{display:block;margin-bottom:6px;font-weight:600;font-size:0.9rem;}";
+    page += "input[type=text],input[type=password],input[type=number],textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:16px;transition:border-color 0.3s;}";
+    page += "input:focus{outline:none;border-color:#4CAF50;background:#fafafa;}";
+    page += "input[type=color]{width:100%;height:45px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white;padding:4px;}";
+    page += "textarea{height:150px;font-family:monospace;font-size:12px;resize:vertical;}";
+    
+    // Checkbox Styling
+    page += ".row{display:flex;align-items:center;gap:10px;margin:15px 0;}";
+    page += "input[type=checkbox]{width:20px;height:20px;accent-color:#4CAF50;}";
+    
+    // Button Styling
+    page += "input[type=submit]{background-color:#2e7d32;color:white;padding:15px;border:none;border-radius:8px;cursor:pointer;width:100%;font-size:18px;font-weight:bold;margin-top:10px;box-shadow:0 4px 6px rgba(46,125,50,0.2);transition:0.2s;}";
+    page += "input[type=submit]:hover{background-color:#1b5e20;transform:translateY(-1px);}";
+    page += "input[type=submit]:active{transform:translateY(1px);}";
+    
+    page += "</style></head><body>";
+    page += "<h1>Zwitscherbox</h1>";
+    page += "<form action='/save' method='POST'>";
+
+    // Hilfsfunktionen (angepasst an das neue Layout)
+    auto addTextField = [&](const String& id, const String& label, const String& value) {
+        page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
+        page += "<input type='text' id='" + id + "' name='" + id + "' value='" + value + "'></div>";
+    };
+    auto addPasswordField = [&](const String& id, const String& label, const String& value) {
+        page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
+        page += "<input type='password' id='" + id + "' name='" + id + "' value='" + value + "'></div>";
+    };
+    auto addNumberField = [&](const String& id, const String& label, int value) {
+        page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
+        page += "<input type='number' id='" + id + "' name='" + id + "' value='" + String(value) + "'></div>";
+    };
+    auto addCheckbox = [&](const String& id, const String& label, bool checked) {
+        page += "<div class='row'><input type='checkbox' id='" + id + "' name='" + id + "' value='1' " + (checked ? "checked" : "") + ">";
+        page += "<label for='" + id + "'> " + label + "</label></div>";
+    };
+    auto addTextArea = [&](const String& id, const String& label, const String& value) {
+        page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
+        page += "<textarea id='" + id + "' name='" + id + "'>" + value + "</textarea></div>";
+    };
+    auto addColorPicker = [&](const String& id, const String& label, const String& value) {
+        String hexColor = value;
+        if (!hexColor.startsWith("#")) {
+            while (hexColor.length() < 6) hexColor = "0" + hexColor;
+            hexColor = "#" + hexColor;
+        }
+        page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
+        page += "<input type='color' id='" + id + "' name='" + id + "' value='" + hexColor + "'></div>";
+    };
+
+    // Sektionen
+    page += "<div class='card'><h2>WLAN Einstellungen</h2>";
+    addTextField("WIFI_SSID", "Netzwerk Name", wifi_ssid);
+    addPasswordField("WIFI_PASS", "Passwort", wifi_pass);
+    page += "</div>";
+
+    page += "<div class='card'><h2>Home Assistant (MQTT)</h2>";
+    addCheckbox("MQTT_INTEGRATION", "MQTT Aktivieren", homeassistant_mqtt_enabled);
+    addTextField("MQTT_SERVER", "Broker Adresse", mqtt_server);
+    addNumberField("MQTT_PORT", "Port", mqtt_port);
+    addTextField("MQTT_USER", "Benutzername", mqtt_user);
+    addPasswordField("MQTT_PASS", "Passwort", mqtt_pass);
+    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id);
+    addTextField("MQTT_BASE_TOPIC", "Basis-Pfad (Topic)", mqtt_base_topic);
+    page += "</div>";
+
+    page += "<div class='card'><h2>Freundschaftslampe</h2>";
+    addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled);
+    addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled);
+    addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color);
+    addTextField("FRIENDLAMP_TOPIC", "Eigenes Lampen-Topic", friendlamp_topic);
+    addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect);
+    addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration);
+    addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness);
+    page += "</div>";
+
+    page += "<div class='card'><h2>Externer Broker (Optional)</h2>";
+    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server);
+    addNumberField("FRIENDLAMP_MQTT_PORT", "Port", friendlamp_mqtt_port);
+    addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", friendlamp_mqtt_user);
+    addPasswordField("FRIENDLAMP_MQTT_PASS", "Passwort", friendlamp_mqtt_pass);
+    addCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "TLS Verschlüsselung nutzen", friendlamp_mqtt_tls_enabled);
+    String ca = mqtt_root_ca_content.length() > 0 ? mqtt_root_ca_content : DEFAULT_ROOT_CA;
+    addTextArea("FRIENDLAMP_MQTT_ROOT_CA", "Root CA Zertifikat", ca);
+    page += "</div>";
+
+    page += "<input type='submit' value='Konfiguration Speichern'>";
+    page += "</form><div style='height:40px;'></div></body></html>";
+    return page;
+}
+
+void handleSave(AsyncWebServerRequest *request) {
+    File configFile = SD.open("/config.txt", FILE_WRITE);
+    if (!configFile) {
+        request->send(500, "text/plain", "Fehler beim Öffnen der config.txt zum Schreiben.");
+        return;
+    }
+    configFile.println("# Zwitscher - Configuration File (Web-Generated)");
+    
+    auto writeParam = [&](const String& key, const String& webName) {
+        if (request->hasParam(webName.c_str(), true)) {
+            String value = request->getParam(webName.c_str(), true)->value();
+            configFile.println(key + "=" + value);
+        }
+    };
+    auto writeCheckbox = [&](const String& key, const String& webName) {
+        String value = "0";
+        if (request->hasParam(webName.c_str(), true)) {
+             if(request->getParam(webName.c_str(), true)->value() == "1") value = "1";
+        }
+         configFile.println(key + "=" + value);
+    };
+
+    // WLAN
+    writeParam("WIFI_SSID", "WIFI_SSID");
+    writeParam("WIFI_PASS", "WIFI_PASS");
+    
+    // Home Assistant
+    writeCheckbox("MQTT_INTEGRATION", "MQTT_INTEGRATION");
+    writeParam("MQTT_SERVER", "MQTT_SERVER");
+    writeParam("MQTT_PORT", "MQTT_PORT");
+    writeParam("MQTT_USER", "MQTT_USER");
+    writeParam("MQTT_PASS", "MQTT_PASS");
+    writeParam("MQTT_CLIENT_ID", "MQTT_CLIENT_ID");
+    writeParam("MQTT_BASE_TOPIC", "MQTT_BASE_TOPIC");
+
+    // Freundschaftslampe
+    writeCheckbox("FRIENDLAMP_ENABLE", "FRIENDLAMP_ENABLE");
+    writeCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "FRIENDLAMP_MQTT_INTEGRATION");
+    if (request->hasParam("FRIENDLAMP_COLOR", true)) {
+        String colorValue = request->getParam("FRIENDLAMP_COLOR", true)->value();
+        if (colorValue.startsWith("#")) colorValue = colorValue.substring(1); // '#' entfernen
+        colorValue.toUpperCase(); // Konsistent in Großbuchstaben umwandeln
+        configFile.println("FRIENDLAMP_COLOR=" + colorValue);
+    }
+    writeParam("FRIENDLAMP_TOPIC", "FRIENDLAMP_TOPIC");
+    writeCheckbox("LED_FADE_EFFECT", "LED_FADE_EFFECT");
+    writeParam("LED_FADE_DURATION", "LED_FADE_DURATION");
+    writeParam("LED_BRIGHTNESS", "LED_BRIGHTNESS");
+
+    // Externer Broker
+    writeParam("FRIENDLAMP_MQTT_SERVER", "FRIENDLAMP_MQTT_SERVER");
+    writeParam("FRIENDLAMP_MQTT_PORT", "FRIENDLAMP_MQTT_PORT");
+    writeParam("FRIENDLAMP_MQTT_USER", "FRIENDLAMP_MQTT_USER");
+    writeParam("FRIENDLAMP_MQTT_PASS", "FRIENDLAMP_MQTT_PASS");
+    writeCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "FRIENDLAMP_MQTT_TLS_ENABLED");
+    if (request->hasParam("FRIENDLAMP_MQTT_ROOT_CA", true)) {
+        configFile.println("BEGIN_CERT");
+        configFile.print(request->getParam("FRIENDLAMP_MQTT_ROOT_CA", true)->value());
+        configFile.println("\nEND_CERT");
+    }
+
+    configFile.close();
+    
+    String response = "<html><head><title>Gespeichert</title><meta charset='UTF-8'></head><body><h1>Konfiguration gespeichert!</h1><p>Das Ger&auml;t wird jetzt neu gestartet. Bitte verbinde dich mit deinem normalen WLAN und schlie&szlig;e dieses Fenster.</p>";
+    response += "<p>In 5 Sekunden wird versucht, die Seite neu zu laden...</p><meta http-equiv='refresh' content='5;url=/' /></body></html>";
+    request->send(200, "text/html", response);
+
+    delay(1000);
+    ESP.restart();
+}
+
+void setupWebServer() {
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/html", getHtmlPage());
+  });
+
+  server.on("/save", HTTP_POST, handleSave);
+  
+  server.onNotFound([](AsyncWebServerRequest *request) {
+    request->send(200, "text/html", getHtmlPage());
+  });
+
+  server.begin();
+  Serial.println("HTTP server started.");
+}
+
+void startConfigPortal(){
+  apMode = true;
+  Serial.println("Starting Access Point 'Zwitscherbox'");
+  WiFi.softAP("Zwitscherbox");
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(IP);
+
+  dns.start(53, "*", IP);
+
+  setupWebServer();
+}
+
 void loadConfig() {
     File configFile = SD.open("/config.txt");
     if (!configFile) {
@@ -219,34 +470,52 @@ void loadConfig() {
 
     Serial.println("Reading config.txt...");
     // Setze Standardwerte für den Fall, dass Keys fehlen
-    homeassistant_mqtt_enabled = false; // Standardmäßig deaktiviert
-    friendlamp_mqtt_enabled = false; // Standardmäßig deaktiviert
+    homeassistant_mqtt_enabled = false;
+    friendlamp_mqtt_enabled = false;
+    friendlamp_mqtt_tls_enabled = false;
+    mqtt_root_ca_content = "";
     mqtt_client_id = "ESP32_AudioPlayer";
     mqtt_base_topic = "audioplayer";
     mqtt_port = 1883;
 
+    bool inCertBlock = false;
 
     while (configFile.available()) {
         String line = configFile.readStringUntil('\n');
-        line.trim(); // Whitespace entfernen
+        line.trim();
+
+        if (inCertBlock) {
+            if (line == "END_CERT") {
+                inCertBlock = false;
+                Serial.println("...End of certificate.");
+            } else {
+                mqtt_root_ca_content += line + "\n";
+            }
+            continue;
+        }
 
         if (line.length() == 0 || line.startsWith("#")) {
             continue; // Leere Zeilen oder Kommentare ignorieren
         }
 
+        if (line == "BEGIN_CERT") {
+            inCertBlock = true;
+            mqtt_root_ca_content = ""; // Clear previous content
+            Serial.println("Reading certificate block...");
+            continue;
+        }
+
         int separatorPos = line.indexOf('=');
         if (separatorPos == -1) {
             Serial.println("Skipping invalid line in config: " + line);
-            continue; // Ungültige Zeile ohne '='
+            continue;
         }
 
         String key = line.substring(0, separatorPos);
         String value = line.substring(separatorPos + 1);
         key.trim();
         value.trim();
-        key.toUpperCase(); // Case-insensitive Key-Vergleich
-
-        // Serial.println("Key: [" + key + "], Value: [" + value + "]"); // Debugging
+        key.toUpperCase();
 
         if (key == "WIFI_SSID") {
             wifi_ssid = value;
@@ -256,7 +525,7 @@ void loadConfig() {
             mqtt_server = value;
         } else if (key == "MQTT_PORT") {
             mqtt_port = value.toInt();
-            if (mqtt_port == 0) mqtt_port = 1883; // Fallback bei ungültiger Zahl
+            if (mqtt_port == 0) mqtt_port = 1883;
         } else if (key == "MQTT_USER") {
             mqtt_user = value;
         } else if (key == "MQTT_PASS") {
@@ -267,6 +536,8 @@ void loadConfig() {
             mqtt_base_topic = value;
         } else if (key == "MQTT_INTEGRATION") {
             homeassistant_mqtt_enabled = (value == "1");
+        } else if (key == "FRIENDLAMP_MQTT_TLS_ENABLED") {
+            friendlamp_mqtt_tls_enabled = (value == "1");
         } else if (key == "FRIENDLAMP_MQTT_INTEGRATION") {
             friendlamp_mqtt_enabled = (value == "1");
         } else if (key == "FRIENDLAMP_ENABLE") {
@@ -304,7 +575,7 @@ void loadConfig() {
         Serial.println("  HA-MQTT User: " + mqtt_user);
         Serial.println("  HA-MQTT Client ID: " + mqtt_client_id);
         Serial.println("  HA-MQTT Base Topic: " + mqtt_base_topic);
-
+        Serial.println("  HA-MQTT TLS: DISABLED");
         // Dynamische Topics erstellen
         mqtt_topic_status = mqtt_base_topic + "/status";
         mqtt_topic_error = mqtt_base_topic + "/error";
@@ -319,6 +590,16 @@ void loadConfig() {
 
     if (friendlamp_mqtt_enabled) {
         Serial.println("Friendship Lamp MQTT Integration: ENABLED");
+         if(friendlamp_mqtt_tls_enabled) {
+            Serial.println("  Friend-MQTT TLS: ENABLED");
+            if(mqtt_root_ca_content.length() > 20) {
+                 Serial.println("  Friend-MQTT Root CA: Loaded (" + String(mqtt_root_ca_content.length()) + " bytes)");
+            } else {
+                 Serial.println("  Friend-MQTT Root CA: NOT loaded or empty!");
+            }
+        } else {
+            Serial.println("  Friend-MQTT TLS: DISABLED");
+        }
     } else {
         Serial.println("Friendship Lamp MQTT Integration: DISABLED");
     }
@@ -327,41 +608,6 @@ void loadConfig() {
         Serial.println("All MQTT Integrations disabled. Device will remain offline.");
     } else {
         Serial.println("WiFi SSID: " + wifi_ssid);
-    }
-}
-
-// --- Funktion zum Aufbau der WLAN-Verbindung ---
-void setup_wifi() {
-    if (!homeassistant_mqtt_enabled && !friendlamp_mqtt_enabled) {
-        return; // Keine Integration aktiviert, kein WLAN benötigt
-    }
-
-    if (wifi_ssid == "") {
-        Serial.println("ERROR: WiFi SSID not configured in config.txt for active MQTT integration!");
-        // Deaktiviere beide, da WLAN nicht konfiguriert ist
-        homeassistant_mqtt_enabled = false; 
-        friendlamp_mqtt_enabled = false;
-        return;
-    }
-
-    Serial.print("Connecting to WiFi SSID: ");
-    Serial.println(wifi_ssid);
-
-    WiFi.mode(WIFI_STA); // Station Mode
-    WiFi.begin(wifi_ssid.c_str(), wifi_pass.c_str());
-
-    unsigned long startAttemptTime = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) { // 15 Sek Timeout
-        Serial.print(".");
-        delay(500);
-    }
-
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("\nERROR: WiFi connection failed!");
-    } else {
-        Serial.println("\nWiFi connected!");
-        Serial.print("IP address: ");
-        Serial.println(WiFi.localIP());
     }
 }
 
@@ -387,6 +633,60 @@ void publishMqttLamp(const String& topic, const String& payload, bool retain = f
         if (homeassistant_mqtt_enabled && mqttClient.connected()) {
             mqttClient.publish(topic.c_str(), payload.c_str(), retain);
         }
+    }
+}
+
+// --- Funktion zum Aufbau der WLAN-Verbindung ---
+void setup_wifi() {
+    if (!homeassistant_mqtt_enabled && !friendlamp_mqtt_enabled) {
+        WiFi.mode(WIFI_OFF);
+        Serial.println("All MQTT integrations disabled. WiFi is OFF.");
+        return; 
+    }
+
+    if (wifi_ssid == "") {
+        Serial.println("WiFi SSID not configured. Starting Config Portal.");
+        startConfigPortal();
+        return;
+    }
+
+    Serial.print("Connecting to WiFi SSID: ");
+    Serial.println(wifi_ssid);
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(wifi_ssid.c_str(), wifi_pass.c_str());
+
+    unsigned long startAttemptTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) { // 15 Sek Timeout
+        Serial.print(".");
+        delay(500);
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("\nWiFi connection failed! Starting Config Portal.");
+        WiFi.disconnect(true);
+        startConfigPortal();
+    } else {
+        Serial.println("\nWiFi connected!");
+        Serial.print("IP address: ");
+        Serial.println(WiFi.localIP());
+        publishMqtt(mqtt_topic_ip, WiFi.localIP().toString(), true);
+
+        // --- Zusätzliche Ausgabe für den Benutzer ---
+        Serial.println("----------------------------------------");
+        Serial.println("Netzwerk & MQTT Status:");
+        Serial.println("  WLAN (SSID): " + wifi_ssid);
+        Serial.println("  IP Adresse:  " + WiFi.localIP().toString());
+        if (homeassistant_mqtt_enabled) {
+            Serial.println("  HA MQTT:     " + mqtt_server + ":" + String(mqtt_port));
+        }
+        if (friendlamp_mqtt_enabled && friendlamp_mqtt_server != "") {
+            Serial.println("  Friend-MQTT: " + friendlamp_mqtt_server + ":" + String(friendlamp_mqtt_port));
+        }
+        Serial.println("----------------------------------------");
+        
+        // Webserver auch im normalen WLAN-Modus unter der lokalen IP-Adresse starten
+        setupWebServer();
     }
 }
 
@@ -444,6 +744,9 @@ void mqtt_reconnect() {
     // --- Wiederverbindung für den internen Broker (Home Assistant) ---
     if (homeassistant_mqtt_enabled && !mqttClient.connected() && millis() - lastMqttReconnectAttempt > mqttReconnectInterval) {
         lastMqttReconnectAttempt = millis();
+
+        mqttClient.setClient(espClient); // Immer den ungesicherten Client verwenden
+
         Serial.print("Attempting Internal (HA) MQTT connection...");
         bool connected = false;
         if (mqtt_user.length() > 0) {
@@ -703,6 +1006,17 @@ void setup() {
 
     // --- MQTT Setup für Freundschaftslampe ---
     if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server != "") {
+        // Unterscheidung der Verschlüsselung: Nur der Friendlamp-Server nutzt TLS, wenn aktiviert
+        if (friendlamp_mqtt_tls_enabled) {
+            if (mqtt_root_ca_content.length() > 20) {
+                espClientSecureLamp.setCACert(mqtt_root_ca_content.c_str());
+            } else {
+                espClientSecureLamp.setInsecure(); // Fallback, falls kein Zertifikat vorhanden ist
+            }
+            mqttClientLamp.setClient(espClientSecureLamp);
+        } else {
+            mqttClientLamp.setClient(espClientLamp); // Standard unverschlüsselt
+        }
         mqttClientLamp.setServer(friendlamp_mqtt_server.c_str(), friendlamp_mqtt_port);
         mqttClientLamp.setCallback(mqttLampCallback);
         Serial.println("Friendship Lamp MQTT Server configured.");
@@ -758,6 +1072,10 @@ void setup() {
 
 // --- Loop --- (Speichert Zustand vor Deep Sleep)
 void loop() {
+    if (apMode) {
+        dns.processNextRequest();
+        return; // Im AP-Modus nichts anderes tun
+    }
     updateFade();
     // --- MQTT Verbindungs-Handling ---
     if ((homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
