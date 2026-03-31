@@ -23,7 +23,7 @@ WIFI_PASS=DeinWLANPasswort
 
 # --- 3. Interner MQTT Broker (für Home Assistant) ---
 # Gib hier die IP-Adresse deines MQTT Brokers (z.B. Raspberry Pi / Home Assistant) ein.
-MQTT_SERVER=192.168.1.100
+MQTT_SERVER=DeinMQTTServer
 MQTT_PORT=1883
 
 # (Optional) Benutzername und Passwort für den internen MQTT Broker. 
@@ -36,7 +36,7 @@ MQTT_CLIENT_ID=ESP32_AudioPlayer
 
 # Das Basis-Topic für alle Status-Meldungen an Home Assistant
 # (z. B. audioplayer/status, audioplayer/playing, audioplayer/volume)
-MQTT_BASE_TOPIC=zwitscherbox
+MQTT_BASE_TOPIC=InternesBaseTopic
 
 # --- 5. Freundschaftslampe (RGB LED Ring) ---
 # Schaltet die LED-Ring-Hardware an (1) oder aus (0).
@@ -94,11 +94,7 @@ jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
 qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
 rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
 HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
-hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
-ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
-3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
-NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
-ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+hkiGwowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
 TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
 jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
 oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
