@@ -26,6 +26,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
   - Das aktuelle Verzeichnis und die Lautstärke werden ausfallsicher im **NVS (Non-Volatile Storage)** gespeichert.
 - **Freundschaftslampe (RGB LED Ring):**
   - **KORREKTUR:** Wenn eine *andere* Box eine Bewegung erkennt und ein MQTT-Signal sendet, leuchtet der eigene LED-Ring in der Farbe des Senders auf. Das Auslösen des *eigenen* PIR-Sensors führt **nicht** zum Leuchten der eigenen Lampe, sondern sendet nur ein Signal an die anderen.
+  - **Zwei Topics:** Die Box unterscheidet zwischen Nachrichten auf dem `ZWITSCHERBOX_TOPIC` (Ring leuchtet komplett in der gesendeten Farbe) und dem `FRIENDLAMP_TOPIC` (Jede dritte LED des Rings leuchtet in der Komplementärfarbe auf).
   - Die LEDs blenden mit einem sanften **Fade-Effekt** ein und aus. Dauer und Helligkeit sind in der `config.txt` einstellbar.
 - **Smart-Home / MQTT Integration:**
   - Die MQTT-Funktionalität ist aufgeteilt:
@@ -97,8 +98,10 @@ MQTT_BASE_TOPIC=audioplayer
 FRIENDLAMP_ENABLE=1
 # Feste Sende-Farbe für DIESE Box im Hex-Format (im Web-Portal visuell auswählbar)
 FRIENDLAMP_COLOR=0000FF
-# Topic über das die Lampen kommunizieren
-FRIENDLAMP_TOPIC=audioplayer/friendlamp
+# Topic für Freundschafts-Farbsignale
+FRIENDLAMP_TOPIC=freundschaft/farbe
+# Topic für Zwitscherbox-Farbsignale
+ZWITSCHERBOX_TOPIC=zwitscherbox/farbe
 
 # Steuerung für LED-Effekte
 LED_FADE_EFFECT=1

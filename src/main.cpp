@@ -28,6 +28,9 @@ SemaphoreHandle_t neoPixelMutex;
 AsyncWebServer server(80);
 DNSServer dns;
 bool apMode = false; // Flag to indicate if we are in AP mode
+bool pendingRestart = false;
+unsigned long restartTime = 0;
+
 
 // ------------------------------------
 
@@ -39,7 +42,7 @@ const int PIR_PIN = 18;
 const int SD_CS_PIN = SS;
 const int BUTTON_PIN = 17; //38
 const int LED_PIN = 16;
-const int LED_COUNT = 16;
+const int LED_COUNT = 8;
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -79,7 +82,8 @@ bool   friendlamp_enabled = false;
 bool   led_fade_effect = false;
 int    led_brightness = 100; // Helligkeit (0-255), Standardwert
 String friendlamp_color = "0000FF";
-String friendlamp_topic = "audioplayer/friendlamp";
+String friendlamp_topic = "freundschaft/farbe";
+String zwitscherbox_topic = "zwitscherbox/farbe";
 unsigned long ledTimeout = 0;
 uint32_t currentLedColor = 0;
 bool ledActive = false;
@@ -132,27 +136,42 @@ unsigned long lastPirActivityTime = 0;
 float smoothedPotValue = -1.0; // Initialwert, der eine sofortige Berechnung beim ersten Mal erzwingt
 const float potSmoothingFactor = 0.2; // Glättungsfaktor (0.0 bis 1.0). Kleinere Werte = mehr Glättung, langsamere Reaktion. 0.1 ist ein guter Start.
 
-// --- LED Fade-Effekte ---
+/// --- LED Fade-Effekte ---
 enum FadeState { FADE_NONE, FADE_IN, FADE_OUT };
 FadeState fadeState = FADE_NONE;
 uint32_t fadeColor = 0;
 unsigned long fadeStartTime = 0;
 int fadeDuration = 1000; // 1 second
-
-void startFadeIn(uint32_t color) {
+// 0 = Normaler Ring, 1 = Jede 3. LED komplementär
+int fadeRingMode = 0;
+void startFadeIn(uint32_t color, int mode = 0) {
+    fadeRingMode = mode; 
+    
     if (led_fade_effect) {
         fadeColor = color;
         fadeState = FADE_IN;
         fadeStartTime = millis();
     } else {
         if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
-            for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, color);
+            strip.clear();
+            
+            uint8_t r = (color >> 16) & 0xFF;
+            uint8_t g = (color >> 8) & 0xFF;
+            uint8_t b = color & 0xFF;
+            // Errechne die Komplementärfarbe (255 - Farbwert)
+            uint32_t compColor = strip.Color(255 - r, 255 - g, 255 - b);
+            for(int i = 0; i < strip.numPixels(); i++) {
+                 if (fadeRingMode == 1 && (i % 3 == 0)) {
+                     strip.setPixelColor(i, compColor);
+                 } else {
+                     strip.setPixelColor(i, color);
+                 }
+            }
             strip.show();
             xSemaphoreGive(neoPixelMutex);
         }
     }
 }
-
 void startFadeOut() {
     if (led_fade_effect) {
         fadeState = FADE_OUT;
@@ -165,45 +184,47 @@ void startFadeOut() {
         }
     }
 }
-
 void updateFade() {
     if (fadeState == FADE_NONE) return;
-
     unsigned long currentTime = millis();
     float progress = (float)(currentTime - fadeStartTime) / fadeDuration;
-
     if (progress >= 1.0) {
         progress = 1.0;
     }
-
     if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+        strip.clear(); 
+        uint8_t r = (fadeColor >> 16) & 0xFF;
+        uint8_t g = (fadeColor >> 8) & 0xFF;
+        uint8_t b = fadeColor & 0xFF;
+        
+        uint8_t r_comp = 255 - r;
+        uint8_t g_comp = 255 - g;
+        uint8_t b_comp = 255 - b;
         if (fadeState == FADE_IN) {
-            uint8_t r = (fadeColor >> 16) & 0xFF;
-            uint8_t g = (fadeColor >> 8) & 0xFF;
-            uint8_t b = fadeColor & 0xFF;
-
             uint32_t currentColor = strip.Color((uint8_t)(r * progress), (uint8_t)(g * progress), (uint8_t)(b * progress));
+            uint32_t currentCompColor = strip.Color((uint8_t)(r_comp * progress), (uint8_t)(g_comp * progress), (uint8_t)(b_comp * progress));
             for (int i = 0; i < strip.numPixels(); i++) {
-                strip.setPixelColor(i, currentColor);
+                 if (fadeRingMode == 1 && (i % 3 == 0)) {
+                     strip.setPixelColor(i, currentCompColor);
+                 } else {
+                     strip.setPixelColor(i, currentColor);
+                 }
             }
             strip.show();
         } else if (fadeState == FADE_OUT) {
-            // KORREKTUR: Anstatt die Farbe bei jedem Frame vom Stripe zu lesen (was zu einem nicht-linearen Fade führt),
-            // verwenden wir die 'fadeColor', die während des Fade-Ins gesetzt wurde. Dies sorgt für ein gleichmäßiges Ausblenden.
-            uint8_t r = (fadeColor >> 16) & 0xFF;
-            uint8_t g = (fadeColor >> 8) & 0xFF;
-            uint8_t b = fadeColor & 0xFF;
-
             uint32_t currentColor = strip.Color((uint8_t)(r * (1.0 - progress)), (uint8_t)(g * (1.0 - progress)), (uint8_t)(b * (1.0 - progress)));
+            uint32_t currentCompColor = strip.Color((uint8_t)(r_comp * (1.0 - progress)), (uint8_t)(g_comp * (1.0 - progress)), (uint8_t)(b_comp * (1.0 - progress)));
             for (int i = 0; i < strip.numPixels(); i++) {
-                strip.setPixelColor(i, currentColor);
+                 if (fadeRingMode == 1 && (i % 3 == 0)) {
+                     strip.setPixelColor(i, currentCompColor);
+                 } else {
+                     strip.setPixelColor(i, currentColor);
+                 }
             }
             strip.show();
         }
         xSemaphoreGive(neoPixelMutex);
     }
-
-
     if (progress == 1.0) {
         if (fadeState == FADE_OUT) {
              if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
@@ -212,9 +233,19 @@ void updateFade() {
                 xSemaphoreGive(neoPixelMutex);
              }
         } else if (fadeState == FADE_IN) {
-            // Am Ende des Einblendens sicherstellen, dass die exakte Farbe gesetzt ist.
             if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
-                for(int i=0; i<strip.numPixels(); i++) strip.setPixelColor(i, fadeColor);
+                strip.clear();
+                uint8_t r = (fadeColor >> 16) & 0xFF;
+                uint8_t g = (fadeColor >> 8) & 0xFF;
+                uint8_t b = fadeColor & 0xFF;
+                uint32_t compColor = strip.Color(255 - r, 255 - g, 255 - b);
+                for(int i = 0; i < strip.numPixels(); i++) {
+                    if (fadeRingMode == 1 && (i % 3 == 0)) {
+                         strip.setPixelColor(i, compColor);
+                    } else {
+                         strip.setPixelColor(i, fadeColor);
+                    }
+                }
                 strip.show();
                 xSemaphoreGive(neoPixelMutex);
             }
@@ -222,7 +253,38 @@ void updateFade() {
         fadeState = FADE_NONE;
     }
 }
-
+void handleFreundschaftMessage(String payload) {
+    Serial.println("--> handleFreundschaftMessage: Received " + payload);
+    // Parse payload "xxx,yyy,zzz"
+    int firstComma = payload.indexOf(',');
+    int secondComma = payload.lastIndexOf(',');
+    if (firstComma != -1 && secondComma != -1 && firstComma != secondComma) {
+        String r_str = payload.substring(0, firstComma);
+        String g_str = payload.substring(firstComma + 1, secondComma);
+        String b_str = payload.substring(secondComma + 1);
+        int r = r_str.toInt();
+        int g = g_str.toInt();
+        int b = b_str.toInt();
+        
+        // Basic validation
+        if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255) {
+            uint32_t color = strip.Color(r, g, b);
+            fadeColor = color; // Set global fade color for fade-out
+            Serial.printf("--> handleFreundschaftMessage: Parsed color (%d, %d, %d)\n", r, g, b);
+            
+            // HIER DIE ÄNDERUNG: Nutze startFadeIn mit Mode = 1 (Komplementär-Muster)
+            startFadeIn(color, 1);
+            
+            // Similar to the other lamp, let's have it on for a while
+            ledTimeout = millis() + 30000; // 30 Sekunden leuchten
+            ledActive = true; 
+        } else {
+            Serial.println("--> handleFreundschaftMessage: Invalid color values in payload.");
+        }
+    } else {
+        Serial.println("--> handleFreundschaftMessage: Invalid payload format. Expected r,g,b");
+    }
+}
 // --- Funktion zum Laden der Konfiguration von SD ---
 
 // --- Webserver & Config Portal ---
@@ -341,7 +403,8 @@ String getHtmlPage() {
     addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled);
     addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled);
     addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color);
-    addTextField("FRIENDLAMP_TOPIC", "Eigenes Lampen-Topic", friendlamp_topic);
+    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic);
+    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic);
     addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect);
     addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration);
     addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness);
@@ -407,6 +470,7 @@ void handleSave(AsyncWebServerRequest *request) {
         configFile.println("FRIENDLAMP_COLOR=" + colorValue);
     }
     writeParam("FRIENDLAMP_TOPIC", "FRIENDLAMP_TOPIC");
+    writeParam("ZWITSCHERBOX_TOPIC", "ZWITSCHERBOX_TOPIC");
     writeCheckbox("LED_FADE_EFFECT", "LED_FADE_EFFECT");
     writeParam("LED_FADE_DURATION", "LED_FADE_DURATION");
     writeParam("LED_BRIGHTNESS", "LED_BRIGHTNESS");
@@ -429,8 +493,11 @@ void handleSave(AsyncWebServerRequest *request) {
     response += "<p>In 5 Sekunden wird versucht, die Seite neu zu laden...</p><meta http-equiv='refresh' content='5;url=/' /></body></html>";
     request->send(200, "text/html", response);
 
-    delay(1000);
-    ESP.restart();
+        request->send(200, "text/html", response);
+
+    // KORREKTUR: Den ESP über den main loop neu starten, damit der Browser die Bestätigung empfangen kann!
+    pendingRestart = true;
+    restartTime = millis() + 2000; // Dem Server 2 Sekunden Zeit geben, die Seite zu schicken
 }
 
 void setupWebServer() {
@@ -546,6 +613,8 @@ void loadConfig() {
             friendlamp_color = value;
         } else if (key == "FRIENDLAMP_TOPIC") {
             friendlamp_topic = value;
+        } else if (key == "ZWITSCHERBOX_TOPIC") {
+            zwitscherbox_topic = value;
         } else if (key == "FRIENDLAMP_MQTT_SERVER") {
             friendlamp_mqtt_server = value;
         } else if (key == "FRIENDLAMP_MQTT_PORT") {
@@ -699,10 +768,10 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
     }
     Serial.printf("Friendlamp MQTT Received [%s]: %s\n", topic, message.c_str());
 
-    Serial.printf("--> handleLampMessage: Received message on topic '%s'\n", topic);
-    if (friendlamp_enabled && String(topic) == friendlamp_topic) {
-        Serial.println("--> handleLampMessage: Topic matches friendlamp_topic!");
-        // Erwartetes Format: "ClientID:ColorHEX" (z.B. "Box2:FF0000")
+    // Use strcmp for safe C-string comparison
+    if (friendlamp_enabled && strcmp(topic, zwitscherbox_topic.c_str()) == 0) {
+        Serial.println("--> handleLampMessage: Topic matches zwitscherbox_topic!");
+        // Erwartetes Format: "ClientID:ColorHEX" (z.B. "ESP32_Zwitscher11:05AB02")
         int separatorPos = message.indexOf(':');
         if (separatorPos != -1) {
             String senderId = message.substring(0, separatorPos);
@@ -711,7 +780,7 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
             Serial.println("--> handleLampMessage: Sender ID is '" + senderId + "', my ID is '" + mqtt_client_id + "'");
             // Reagiere nicht auf die eigene Nachricht
             if (senderId != mqtt_client_id) {
-                Serial.println("--> handleLampMessage: Sender ID is different, proceeding to light up LED.");
+                Serial.println("--> handleLampMessage: Sender ID is different, proceeding to light up LED (Full).");
                 currentLedColor = strtol(colorStr.c_str(), NULL, 16);
                 ledTimeout = millis() + 30000; // 30 Sekunden leuchten
                 ledActive = true;
@@ -719,9 +788,16 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                     Serial.println("--> handleLampMessage: Starting Fade-In.");
                     startFadeIn(currentLedColor);
                 }
-                Serial.printf("Friendship Lamp: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
+                Serial.printf("Zwitscherbox: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
+            } else {
+                Serial.println("--> handleLampMessage: Ignored own message.");
             }
+        } else {
+            Serial.println("--> handleLampMessage: Invalid format for Zwitscherbox. Expected Sender:HexColor");
         }
+    } else if (friendlamp_enabled && strcmp(topic, friendlamp_topic.c_str()) == 0) {
+        Serial.println("--> handleLampMessage: Topic matches Freundschaft!");
+        handleFreundschaftMessage(message);
     }
 }
 
@@ -762,7 +838,8 @@ void mqtt_reconnect() {
              // Subscribe auf dem internen Broker für die Lampe, falls diese auch dort läuft
              if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server == "") {
                  mqttClient.subscribe(friendlamp_topic.c_str());
-                 Serial.println("Subscribed to Friendlamp topic on internal broker.");
+                 mqttClient.subscribe(zwitscherbox_topic.c_str());
+                 Serial.println("Subscribed to Friendlamp topics on internal broker.");
              }
         } else {
             Serial.print("failed, rc=");
@@ -789,8 +866,9 @@ void mqtt_reconnect() {
 
             if (connected) {
                 Serial.println("connected");
-                Serial.println("--> LAMP MQTT: Subscribing to topic: " + friendlamp_topic);
+                Serial.println("--> LAMP MQTT: Subscribing to topics: " + friendlamp_topic + " and " + zwitscherbox_topic);
                 mqttClientLamp.subscribe(friendlamp_topic.c_str());
+                mqttClientLamp.subscribe(zwitscherbox_topic.c_str());
             } else {
                 Serial.print("failed, rc=");
                 Serial.print(mqttClientLamp.state());
@@ -1072,6 +1150,19 @@ void setup() {
 
 // --- Loop --- (Speichert Zustand vor Deep Sleep)
 void loop() {
+    
+    // NEU: Verzögerter Neustart nachdem eine Konfiguration gespeichert wurde
+    if (pendingRestart) {
+        if (millis() > restartTime) {
+            ESP.restart();
+        }
+        return; // Im Warte-Zustand soll das System alles andere ignorieren
+    }
+    if (apMode) {
+        dns.processNextRequest();
+        return; // Im AP-Modus nichts anderes tun
+    }
+    
     if (apMode) {
         dns.processNextRequest();
         return; // Im AP-Modus nichts anderes tun
@@ -1124,8 +1215,8 @@ void loop() {
             // Freundschaftslampe: Sende Signal und leuchte auf
             if (friendlamp_enabled) {
                 String payload = mqtt_client_id + ":" + friendlamp_color;
-                publishMqttLamp(friendlamp_topic, payload, false);
-                Serial.println("Friendship Lamp: Sent color " + friendlamp_color);
+                publishMqttLamp(zwitscherbox_topic, payload, false);
+                Serial.println("Zwitscherbox: Sent color " + friendlamp_color + " to topic " + zwitscherbox_topic);
             }
 
              if (currentDirectoryIndex >= 0 && !currentMp3Files.empty()) {
