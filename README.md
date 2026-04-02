@@ -10,7 +10,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
 - **Zwei getrennte MQTT-Integrationen** für Smart Home (z.B. Home Assistant) und die Freundschaftslampen-Funktion.
 - **Konfigurierbare LED-Effekte** (Helligkeit, Fade-Dauer).
 - **NVS-Speicher** für Lautstärke und letzten Ordner, um den Zustand nach Standby beizubehalten.
-- **Integriertes Web-Portal** zur einfachen Konfiguration bei Verbindungsproblemen.
+- **Integriertes Web-Portal** zur einfachen Konfiguration bei Verbindungsproblemen (inkl. visueller Farbauswahl für die LED).
 
 ## 🌟 Detaillierte Features
 
@@ -34,7 +34,7 @@ Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-
     - Beide können unabhängig voneinander aktiviert werden. Das Gerät bleibt komplett offline, wenn beide deaktiviert sind.
   - Verbindet sich über WiFi und schickt Echtzeit-Statusupdates über MQTT (Lautstärke, Wiedergabestatus, Fehler, aktuelle IP).
 - **Timeouts:** Maximale Wiedergabedauer für eine Random-Session ist auf 5 Minuten limitiert um Endlos-Wiedergabe zu vermeiden.
-- **Web-Konfigurationsportal:** Wenn keine gültige WLAN-Verbindung hergestellt werden kann, startet das Gerät einen eigenen Access Point (`Zwitscherbox`). Über eine Weboberfläche können alle Einstellungen bequem konfiguriert werden, ohne die SD-Karte manuell bearbeiten zu müssen.
+- **Web-Konfigurationsportal:** Wenn keine gültige WLAN-Verbindung hergestellt werden kann, startet das Gerät einen eigenen Access Point (`Zwitscherbox`). Über eine Weboberfläche können alle Einstellungen bequem konfiguriert werden, ohne die SD-Karte manuell bearbeiten zu müssen. Die Farbe der Freundschaftslampe lässt sich hierbei besonders intuitiv über einen visuellen HTML-Farbwähler einstellen.
 
 ## 🛠 Hardware-Anforderungen
 
@@ -95,7 +95,7 @@ MQTT_BASE_TOPIC=audioplayer
 # --- 5. Freundschaftslampe (RGB LED Ring) ---
 # Schaltet die LED-Ring-Hardware an (1) oder aus (0).
 FRIENDLAMP_ENABLE=1
-# Feste Sende-Farbe für DIESE Box im Hex-Format
+# Feste Sende-Farbe für DIESE Box im Hex-Format (im Web-Portal visuell auswählbar)
 FRIENDLAMP_COLOR=0000FF
 # Topic über das die Lampen kommunizieren
 FRIENDLAMP_TOPIC=audioplayer/friendlamp
