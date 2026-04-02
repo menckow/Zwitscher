@@ -338,9 +338,10 @@ String getHtmlPage() {
     page += "input:focus{outline:none;border-color:#4CAF50;background:#fafafa;}";
     page += "input[type=color]{width:100%;height:45px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white;padding:4px;}";
     page += "textarea{height:150px;font-family:monospace;font-size:12px;resize:vertical;}";
+    page += ".help-text{font-size:0.8rem;color:#666;margin-top:-8px;margin-bottom:15px;line-height:1.3;}";
     
     // Checkbox Styling
-    page += ".row{display:flex;align-items:center;gap:10px;margin:15px 0;}";
+    page += ".row{display:flex;align-items:center;gap:10px;margin:15px 0 5px 0;}";
     page += "input[type=checkbox]{width:20px;height:20px;accent-color:#4CAF50;}";
     
     // Button Styling
@@ -352,28 +353,33 @@ String getHtmlPage() {
     page += "<h1>Zwitscherbox</h1>";
     page += "<form action='/save' method='POST'>";
 
-    // Hilfsfunktionen (angepasst an das neue Layout)
-    auto addTextField = [&](const String& id, const String& label, const String& value) {
+    // Hilfsfunktionen (angepasst an das neue Layout mit Erklärungen)
+    auto addTextField = [&](const String& id, const String& label, const String& value, const String& desc = "") {
         page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
         page += "<input type='text' id='" + id + "' name='" + id + "' value='" + value + "'></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
     };
-    auto addPasswordField = [&](const String& id, const String& label, const String& value) {
+    auto addPasswordField = [&](const String& id, const String& label, const String& value, const String& desc = "") {
         page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
         page += "<input type='password' id='" + id + "' name='" + id + "' value='" + value + "'></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
     };
-    auto addNumberField = [&](const String& id, const String& label, int value) {
+    auto addNumberField = [&](const String& id, const String& label, int value, const String& desc = "") {
         page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
         page += "<input type='number' id='" + id + "' name='" + id + "' value='" + String(value) + "'></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
     };
-    auto addCheckbox = [&](const String& id, const String& label, bool checked) {
+    auto addCheckbox = [&](const String& id, const String& label, bool checked, const String& desc = "") {
         page += "<div class='row'><input type='checkbox' id='" + id + "' name='" + id + "' value='1' " + (checked ? "checked" : "") + ">";
         page += "<label for='" + id + "'> " + label + "</label></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
     };
-    auto addTextArea = [&](const String& id, const String& label, const String& value) {
+    auto addTextArea = [&](const String& id, const String& label, const String& value, const String& desc = "") {
         page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
         page += "<textarea id='" + id + "' name='" + id + "'>" + value + "</textarea></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
     };
-    auto addColorPicker = [&](const String& id, const String& label, const String& value) {
+    auto addColorPicker = [&](const String& id, const String& label, const String& value, const String& desc = "") {
         String hexColor = value;
         if (!hexColor.startsWith("#")) {
             while (hexColor.length() < 6) hexColor = "0" + hexColor;
@@ -381,43 +387,44 @@ String getHtmlPage() {
         }
         page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
         page += "<input type='color' id='" + id + "' name='" + id + "' value='" + hexColor + "'></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
     };
 
     // Sektionen
     page += "<div class='card'><h2>WLAN Einstellungen</h2>";
-    addTextField("WIFI_SSID", "Netzwerk Name", wifi_ssid);
-    addPasswordField("WIFI_PASS", "Passwort", wifi_pass);
+    addTextField("WIFI_SSID", "Netzwerk Name", wifi_ssid, "Wie heißt dein normales WLAN zu Hause?");
+    addPasswordField("WIFI_PASS", "Passwort", wifi_pass, "Das Passwort für dein WLAN, damit die Box online gehen kann.");
     page += "</div>";
 
     page += "<div class='card'><h2>Home Assistant (MQTT)</h2>";
-    addCheckbox("MQTT_INTEGRATION", "MQTT Aktivieren", homeassistant_mqtt_enabled);
+    addCheckbox("MQTT_INTEGRATION", "MQTT Aktivieren", homeassistant_mqtt_enabled, "Aktiviert die Steuerung und Statusmeldungen für Smart Home Systeme.");
     addTextField("MQTT_SERVER", "Broker Adresse", mqtt_server);
     addNumberField("MQTT_PORT", "Port", mqtt_port);
     addTextField("MQTT_USER", "Benutzername", mqtt_user);
     addPasswordField("MQTT_PASS", "Passwort", mqtt_pass);
-    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id);
-    addTextField("MQTT_BASE_TOPIC", "Basis-Pfad (Topic)", mqtt_base_topic);
+    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id, "Einzigartiger Name dieser Box im Netzwerk.");
+    addTextField("MQTT_BASE_TOPIC", "Basis-Pfad (Topic)", mqtt_base_topic, "Der Haupt-Pfad, über den Home Assistant mit der Box spricht.");
     page += "</div>";
 
     page += "<div class='card'><h2>Freundschaftslampe</h2>";
-    addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled);
-    addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled);
-    addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color);
-    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic);
-    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic);
-    addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect);
-    addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration);
-    addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness);
+    addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled, "Nur anhaken, wenn ein LED-Ring angeschlossen ist!");
+    addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled, "Vernetzt deine Box über das Internet mit den Boxen deiner Freunde.");
+    addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color, "In dieser Farbe leuchten die Lampen deiner Freunde, wenn DU vor deiner Box stehst.");
+    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Empfangen der Signale deiner Freunde.");
+    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden deines eigenen Signals.");
+    addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
+    addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
+    addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness, "Maximale Helligkeit des LED-Rings.");
     page += "</div>";
 
     page += "<div class='card'><h2>Externer Broker (Optional)</h2>";
-    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server);
+    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server, "Trage hier deinen eigenen Internet-Broker ein (falls genutzt).");
     addNumberField("FRIENDLAMP_MQTT_PORT", "Port", friendlamp_mqtt_port);
     addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", friendlamp_mqtt_user);
     addPasswordField("FRIENDLAMP_MQTT_PASS", "Passwort", friendlamp_mqtt_pass);
-    addCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "TLS Verschlüsselung nutzen", friendlamp_mqtt_tls_enabled);
+    addCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "TLS Verschlüsselung nutzen", friendlamp_mqtt_tls_enabled, "Sichert die Verbindung ab. In der Regel für öffentliche MQTT Broker empfohlen!");
     String ca = mqtt_root_ca_content.length() > 0 ? mqtt_root_ca_content : DEFAULT_ROOT_CA;
-    addTextArea("FRIENDLAMP_MQTT_ROOT_CA", "Root CA Zertifikat", ca);
+    addTextArea("FRIENDLAMP_MQTT_ROOT_CA", "Root CA Zertifikat", ca, "Das Stammzertifikat des Servers für die verschlüsselte Verbindung.");
     page += "</div>";
 
     page += "<input type='submit' value='Konfiguration Speichern'>";
