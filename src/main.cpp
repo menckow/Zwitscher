@@ -20,7 +20,7 @@
 #include <ESPAsyncWebServer.h> // For Webserver
 #include <AsyncTCP.h>          // For Webserver
 #include <DNSServer.h>         // For Captive Portal
-#include "freertos/semphr.h" // For Mutext_NeoPixel.h>
+#include "freertos/semphr.h"
 
 SemaphoreHandle_t neoPixelMutex;
 
@@ -137,14 +137,19 @@ float smoothedPotValue = -1.0; // Initialwert, der eine sofortige Berechnung bei
 const float potSmoothingFactor = 0.2; // Glättungsfaktor (0.0 bis 1.0). Kleinere Werte = mehr Glättung, langsamere Reaktion. 0.1 ist ein guter Start.
 
 /// --- LED Fade-Effekte ---
-enum FadeState { FADE_NONE, FADE_IN, FADE_OUT };
+enum FadeState { FADE_NONE, FADE_IN, FADE_OUT, FADE_RAINBOW_SPIN, FADE_RAINBOW_OUT };
 FadeState fadeState = FADE_NONE;
 uint32_t fadeColor = 0;
 unsigned long fadeStartTime = 0;
 int fadeDuration = 1000; // 1 second
 // 0 = Normaler Ring, 1 = Jede 3. LED komplementär
 int fadeRingMode = 0;
-void startFadeIn(uint32_t color, int mode = 0) {
+void startFadeIn(uint32_t color, int mode = 0, bool isRainbow = false) {
+    if (isRainbow) {
+        fadeState = FADE_RAINBOW_SPIN;
+        fadeStartTime = millis();
+        return;
+    }
     fadeRingMode = mode; 
     
     if (led_fade_effect) {
@@ -174,7 +179,11 @@ void startFadeIn(uint32_t color, int mode = 0) {
 }
 void startFadeOut() {
     if (led_fade_effect) {
-        fadeState = FADE_OUT;
+        if (fadeState == FADE_RAINBOW_SPIN) {
+             fadeState = FADE_RAINBOW_OUT;
+        } else {
+             fadeState = FADE_OUT;
+        }
         fadeStartTime = millis();
     } else {
         if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
@@ -187,6 +196,36 @@ void startFadeOut() {
 void updateFade() {
     if (fadeState == FADE_NONE) return;
     unsigned long currentTime = millis();
+    
+    if (fadeState == FADE_RAINBOW_SPIN || fadeState == FADE_RAINBOW_OUT) {
+        if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+            float brightness = 1.0;
+            if (fadeState == FADE_RAINBOW_OUT) {
+                float rainbowProgress = (float)(currentTime - fadeStartTime) / fadeDuration;
+                if (rainbowProgress >= 1.0) {
+                     strip.clear();
+                     strip.show();
+                     fadeState = FADE_NONE;
+                     xSemaphoreGive(neoPixelMutex);
+                     return;
+                }
+                brightness = 1.0 - rainbowProgress;
+            }
+            
+            for(int i=0; i<strip.numPixels(); i++) {
+                int pixelHue = (currentTime * 10) + (i * 65536L / strip.numPixels());
+                uint32_t c = strip.gamma32(strip.ColorHSV(pixelHue));
+                uint8_t r = ((c >> 16) & 0xFF) * brightness * led_brightness / 255;
+                uint8_t g = ((c >> 8) & 0xFF) * brightness * led_brightness / 255;
+                uint8_t b = (c & 0xFF) * brightness * led_brightness / 255;
+                strip.setPixelColor(i, strip.Color(r,g,b));
+            }
+            strip.show();
+            xSemaphoreGive(neoPixelMutex);
+        }
+        return;
+    }
+
     float progress = (float)(currentTime - fadeStartTime) / fadeDuration;
     if (progress >= 1.0) {
         progress = 1.0;
@@ -255,6 +294,12 @@ void updateFade() {
 }
 void handleFreundschaftMessage(String payload) {
     Serial.println("--> handleFreundschaftMessage: Received " + payload);
+    if (payload.equalsIgnoreCase("RAINBOW")) {
+        startFadeIn(0, 0, true);
+        ledTimeout = millis() + 30000;
+        ledActive = true; 
+        return;
+    }
     // Parse payload "xxx,yyy,zzz"
     int firstComma = payload.indexOf(',');
     int secondComma = payload.lastIndexOf(',');
@@ -381,13 +426,21 @@ String getHtmlPage() {
     };
     auto addColorPicker = [&](const String& id, const String& label, const String& value, const String& desc = "") {
         String hexColor = value;
-        if (!hexColor.startsWith("#")) {
+        if (hexColor.equalsIgnoreCase("RAINBOW")) {
+            hexColor = "#000000";
+        } else if (!hexColor.startsWith("#") && hexColor.length() > 0) {
             while (hexColor.length() < 6) hexColor = "0" + hexColor;
             hexColor = "#" + hexColor;
         }
         page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
-        page += "<input type='color' id='" + id + "' name='" + id + "' value='" + hexColor + "'></div>";
-        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
+        page += "<div style='display:flex; gap:10px;'>";
+        page += "<input type='color' style='width:60px; height:45px; padding:0; border:1px solid #ddd; border-radius:8px; cursor:pointer;' id='" + id + "_color' value='" + hexColor + "'";
+        page += " oninput=\"document.getElementById('" + id + "').value = this.value\">";
+        page += "<input type='text' id='" + id + "' name='" + id + "' value='" + value + "'";
+        page += " oninput=\"if(this.value.match(/^#[0-9a-fA-F]{6}$/)) document.getElementById('" + id + "_color').value = this.value\">";
+        page += "</div>";
+        if (desc.length() > 0) page += "<div class='help-text' style='margin-top:5px;'>" + desc + "</div>";
+        page += "</div>";
     };
 
     // Sektionen
@@ -402,7 +455,7 @@ String getHtmlPage() {
     addNumberField("MQTT_PORT", "Port", mqtt_port);
     addTextField("MQTT_USER", "Benutzername", mqtt_user);
     addPasswordField("MQTT_PASS", "Passwort", mqtt_pass);
-    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id, "Einzigartiger Name dieser Box. Ist notwendig um zu unterscheiden wann der LED Ring leuchten soll.");
+    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id, "Einzigartiger Name dieser Box im Netzwerk.");
     addTextField("MQTT_BASE_TOPIC", "Basis-Pfad (Topic)", mqtt_base_topic, "Der Haupt-Pfad, über den Home Assistant mit der Box spricht.");
     page += "</div>";
 
@@ -410,17 +463,17 @@ String getHtmlPage() {
     addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled, "Nur anhaken, wenn ein LED-Ring angeschlossen ist!");
     addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled, "Vernetzt deine Box über das Internet mit den Boxen deiner Freunde.");
     addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color, "In dieser Farbe leuchten die Lampen deiner Freunde, wenn DU vor deiner Box stehst.");
-    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Senden/Empfangen der Signale von der Freundschaftslampe (siehe https://github.com/menckow/Friendshiplamp)");
-    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden/Empfangen für die Zwitscherbox.");
+    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Empfangen der Signale deiner Freunde.");
+    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden deines eigenen Signals.");
     addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
     addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
     addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness, "Maximale Helligkeit des LED-Rings.");
     page += "</div>";
 
     page += "<div class='card'><h2>Externer Broker (Optional)</h2>";
-    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server, "Adresse des öffentlichen MQTT Broker, über den der Farbenstatus ausgetauscht wird.");
-    addNumberField("FRIENDLAMP_MQTT_PORT", "Port", friendlamp_mqtt_port, "In der Regel 8883, 8884 oder 1883");
-    addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", friendlamp_mqtt_user, "Benutzername für den MQTT Server");
+    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server, "Trage hier deinen eigenen Internet-Broker ein (falls genutzt).");
+    addNumberField("FRIENDLAMP_MQTT_PORT", "Port", friendlamp_mqtt_port);
+    addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", friendlamp_mqtt_user);
     addPasswordField("FRIENDLAMP_MQTT_PASS", "Passwort", friendlamp_mqtt_pass);
     addCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "TLS Verschlüsselung nutzen", friendlamp_mqtt_tls_enabled, "Sichert die Verbindung ab. In der Regel für öffentliche MQTT Broker empfohlen!");
     String ca = mqtt_root_ca_content.length() > 0 ? mqtt_root_ca_content : DEFAULT_ROOT_CA;
@@ -499,8 +552,6 @@ void handleSave(AsyncWebServerRequest *request) {
     String response = "<html><head><title>Gespeichert</title><meta charset='UTF-8'></head><body><h1>Konfiguration gespeichert!</h1><p>Das Ger&auml;t wird jetzt neu gestartet. Bitte verbinde dich mit deinem normalen WLAN und schlie&szlig;e dieses Fenster.</p>";
     response += "<p>In 5 Sekunden wird versucht, die Seite neu zu laden...</p><meta http-equiv='refresh' content='5;url=/' /></body></html>";
     request->send(200, "text/html", response);
-
-        request->send(200, "text/html", response);
 
     // KORREKTUR: Den ESP über den main loop neu starten, damit der Browser die Bestätigung empfangen kann!
     pendingRestart = true;
@@ -788,12 +839,13 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
             // Reagiere nicht auf die eigene Nachricht
             if (senderId != mqtt_client_id) {
                 Serial.println("--> handleLampMessage: Sender ID is different, proceeding to light up LED (Full).");
-                currentLedColor = strtol(colorStr.c_str(), NULL, 16);
+                bool isRainbow = colorStr.equalsIgnoreCase("RAINBOW");
+                currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
                 ledTimeout = millis() + 30000; // 30 Sekunden leuchten
                 ledActive = true;
                 if (friendlamp_enabled) {
                     Serial.println("--> handleLampMessage: Starting Fade-In.");
-                    startFadeIn(currentLedColor);
+                    startFadeIn(currentLedColor, 0, isRainbow);
                 }
                 Serial.printf("Zwitscherbox: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
             } else {
@@ -885,7 +937,7 @@ void mqtt_reconnect() {
     }
 }
 
-// --- Funktion zum Finden von Verzeichnissen mit MP3s --- 
+// --- Funktion zum Finden von Verzeichnissen mit MP3s ---
 void findMp3Directories(File dir) {
     // ... (Code unverändert) ...
         while (true) {
@@ -918,7 +970,7 @@ void findMp3Directories(File dir) {
     }
 }
 
-// --- Funktion zum Laden der MP3-Dateien aus dem aktuellen Verzeichnis --- (
+// --- Funktion zum Laden der MP3-Dateien aus dem aktuellen Verzeichnis ---
 void loadFilesFromCurrentDirectory() {
     // ... (Code unverändert, nutzt jetzt den potenziell geladenen currentDirectoryIndex) ...
     currentMp3Files.clear();
@@ -1165,11 +1217,6 @@ void loop() {
         }
         return; // Im Warte-Zustand soll das System alles andere ignorieren
     }
-    if (apMode) {
-        dns.processNextRequest();
-        return; // Im AP-Modus nichts anderes tun
-    }
-    
     if (apMode) {
         dns.processNextRequest();
         return; // Im AP-Modus nichts anderes tun
