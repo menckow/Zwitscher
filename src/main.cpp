@@ -402,7 +402,7 @@ String getHtmlPage() {
     addNumberField("MQTT_PORT", "Port", mqtt_port);
     addTextField("MQTT_USER", "Benutzername", mqtt_user);
     addPasswordField("MQTT_PASS", "Passwort", mqtt_pass);
-    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id, "Einzigartiger Name dieser Box im Netzwerk.");
+    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id, "Einzigartiger Name dieser Box. Ist notwendig um zu unterscheiden wann der LED Ring leuchten soll.");
     addTextField("MQTT_BASE_TOPIC", "Basis-Pfad (Topic)", mqtt_base_topic, "Der Haupt-Pfad, über den Home Assistant mit der Box spricht.");
     page += "</div>";
 
@@ -410,17 +410,17 @@ String getHtmlPage() {
     addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled, "Nur anhaken, wenn ein LED-Ring angeschlossen ist!");
     addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled, "Vernetzt deine Box über das Internet mit den Boxen deiner Freunde.");
     addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color, "In dieser Farbe leuchten die Lampen deiner Freunde, wenn DU vor deiner Box stehst.");
-    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Empfangen der Signale deiner Freunde.");
-    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden deines eigenen Signals.");
+    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Senden/Empfangen der Signale von der Freundschaftslampe (siehe https://github.com/menckow/Friendshiplamp)");
+    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden/Empfangen für die Zwitscherbox.");
     addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
     addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
     addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness, "Maximale Helligkeit des LED-Rings.");
     page += "</div>";
 
     page += "<div class='card'><h2>Externer Broker (Optional)</h2>";
-    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server, "Trage hier deinen eigenen Internet-Broker ein (falls genutzt).");
-    addNumberField("FRIENDLAMP_MQTT_PORT", "Port", friendlamp_mqtt_port);
-    addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", friendlamp_mqtt_user);
+    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server, "Adresse des öffentlichen MQTT Broker, über den der Farbenstatus ausgetauscht wird.");
+    addNumberField("FRIENDLAMP_MQTT_PORT", "Port", friendlamp_mqtt_port, "In der Regel 8883, 8884 oder 1883");
+    addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", friendlamp_mqtt_user, "Benutzername für den MQTT Server");
     addPasswordField("FRIENDLAMP_MQTT_PASS", "Passwort", friendlamp_mqtt_pass);
     addCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "TLS Verschlüsselung nutzen", friendlamp_mqtt_tls_enabled, "Sichert die Verbindung ab. In der Regel für öffentliche MQTT Broker empfohlen!");
     String ca = mqtt_root_ca_content.length() > 0 ? mqtt_root_ca_content : DEFAULT_ROOT_CA;
