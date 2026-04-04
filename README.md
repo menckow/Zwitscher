@@ -1,5 +1,5 @@
 # Zwitscher - Directory-Based Random MP3 Player 🎵
-
+![Bild der Zwitscherbox](https://github.com/menckow/Zwitscher/blob/main/doc/Zwitscher.png)
 Ein intelligenter, verzeichnisbasierter MP3-Player auf Basis des **ESP32-S3 (YB-ESP32-S3-AMP)** Controllers.
 
 ### ✨ Kernfunktionen im Überblick
