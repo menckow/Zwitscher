@@ -145,6 +145,26 @@ Bei aktiver MQTT-Verbindung veröffentlicht der Aufbau auf folgenden Topics (bas
 * `audioplayer/friendlamp`: Wird zum Austausch der Farben für die Freundschaftslampe zwischen den Geräten genutzt.
 * `audioplayer/error`: Fehler-Meldungen (z.B. Dateisystem-Fehler, fehlende MP3s).
 
+### 📝 MQTT JSON-Payload (Freundschaftslampe & Zwitscherbox)
+
+Die Hardware kommuniziert zur Farbübergabe und Effektsteuerung untereinander über ein strukturiertes JSON-Format. Aus Gründen der Abwärtskompatibilität werden auch noch ältere String-Nachrichten im Legacy-Format (`SenderID:HexFarbe`) fehlerfrei decodiert (Fallback-Mechanismus). 
+
+Ein reguläres JSON-Paket vom Sender (oder deinem Smart Home System) sieht wie folgt aus:
+
+```json
+{
+  "client_id": "Mein_PIR_Sensor_ESP",
+  "color": "FF0000",
+  "effect": "fade",
+  "duration": 30000
+}
+```
+
+- **`client_id` (String):** Der eindeutige Name des abspielenden Gerätes (wird genutzt, damit die Box nicht auf ihre eigenen Nachrichten reagiert und Endlosschleifen verhindert werden).
+- **`color` (String):** Der HEX-Farbcode (z. B. `00FF00` für Grün). Wird als Farbe das Wort `RAINBOW` übergeben, startet der versteckte, kreisende Licht-Effekt.
+- **`effect` (String):** Steuert das Animationsverhalten der NeoPixel-LEDs. Unterstützte Werte sind `"fade"` (weiches Einblenden), `"blink"` (sekündliches Aufblinken im Takt) und `"rainbow"`.
+- **`duration` (Integer):** Zeit in Millisekunden, wie lange die LEDs leuchten sollen, bevor sie sich wieder automatisch abschalten (Standard: `30000` = 30 Sekunden). Hiermit kann ein Home Assistant die Dauer der optischen Signale je nach Anwendungsszenario (z.B. kurzer Alarm vs. langes Hintergrundleuchten) perfekt steuern.
+
 ## 📄 Lizenz
 
 Dieses Projekt wurde exklusiv als Private/Open-Source-Lösung entwickelt. 

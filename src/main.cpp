@@ -17,6 +17,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <Adafruit_NeoPixel.h>
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h> // For Webserver
 #include <AsyncTCP.h>          // For Webserver
 #include <DNSServer.h>         // For Captive Portal
@@ -137,16 +138,22 @@ float smoothedPotValue = -1.0; // Initialwert, der eine sofortige Berechnung bei
 const float potSmoothingFactor = 0.2; // Glättungsfaktor (0.0 bis 1.0). Kleinere Werte = mehr Glättung, langsamere Reaktion. 0.1 ist ein guter Start.
 
 /// --- LED Fade-Effekte ---
-enum FadeState { FADE_NONE, FADE_IN, FADE_OUT, FADE_RAINBOW_SPIN, FADE_RAINBOW_OUT };
+enum FadeState { FADE_NONE, FADE_IN, FADE_OUT, FADE_RAINBOW_SPIN, FADE_RAINBOW_OUT, FADE_BLINK };
 FadeState fadeState = FADE_NONE;
 uint32_t fadeColor = 0;
 unsigned long fadeStartTime = 0;
 int fadeDuration = 1000; // 1 second
 // 0 = Normaler Ring, 1 = Jede 3. LED komplementär
 int fadeRingMode = 0;
-void startFadeIn(uint32_t color, int mode = 0, bool isRainbow = false) {
+void startFadeIn(uint32_t color, int mode = 0, bool isRainbow = false, bool isBlink = false) {
     if (isRainbow) {
         fadeState = FADE_RAINBOW_SPIN;
+        fadeStartTime = millis();
+        return;
+    }
+    if (isBlink) {
+        fadeColor = color;
+        fadeState = FADE_BLINK;
         fadeStartTime = millis();
         return;
     }
@@ -181,6 +188,8 @@ void startFadeOut() {
     if (led_fade_effect) {
         if (fadeState == FADE_RAINBOW_SPIN) {
              fadeState = FADE_RAINBOW_OUT;
+        } else if (fadeState == FADE_BLINK) {
+             fadeState = FADE_OUT;
         } else {
              fadeState = FADE_OUT;
         }
@@ -197,6 +206,24 @@ void updateFade() {
     if (fadeState == FADE_NONE) return;
     unsigned long currentTime = millis();
     
+    if (fadeState == FADE_BLINK) {
+        if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+            uint8_t r = (fadeColor >> 16) & 0xFF;
+            uint8_t g = (fadeColor >> 8) & 0xFF;
+            uint8_t b = fadeColor & 0xFF;
+            bool isOn = ((currentTime - fadeStartTime) % 1000) < 500;
+            if (isOn) {
+                uint32_t c = strip.Color(r * led_brightness / 255, g * led_brightness / 255, b * led_brightness / 255);
+                strip.fill(c);
+            } else {
+                strip.clear();
+            }
+            strip.show();
+            xSemaphoreGive(neoPixelMutex);
+        }
+        return;
+    }
+
     if (fadeState == FADE_RAINBOW_SPIN || fadeState == FADE_RAINBOW_OUT) {
         if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
             float brightness = 1.0;
@@ -586,7 +613,8 @@ void setupWebServer() {
 void startConfigPortal(){
   apMode = true;
   Serial.println("Starting Access Point 'Zwitscherbox'");
-  WiFi.softAP("Zwitscherbox");
+  Serial.println("Password for Access Point is: 12345678");
+  WiFi.softAP("Zwitscherbox", "12345678");
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
@@ -839,30 +867,57 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
     // Use strcmp for safe C-string comparison
     if (friendlamp_enabled && strcmp(topic, zwitscherbox_topic.c_str()) == 0) {
         Serial.println("--> handleLampMessage: Topic matches zwitscherbox_topic!");
-        // Erwartetes Format: "ClientID:ColorHEX" (z.B. "ESP32_Zwitscher11:05AB02")
-        int separatorPos = message.indexOf(':');
-        if (separatorPos != -1) {
-            String senderId = message.substring(0, separatorPos);
-            String colorStr = message.substring(separatorPos + 1);
+        
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        
+        if (!error && !doc["client_id"].isNull()) {
+            String senderId = doc["client_id"] | "";
+            String colorStr = doc["color"] | "";
+            String effect = doc["effect"] | "fade";
+            long duration = doc["duration"] | 30000;
             
-            Serial.println("--> handleLampMessage: Sender ID is '" + senderId + "', my ID is '" + mqtt_client_id + "'");
-            // Reagiere nicht auf die eigene Nachricht
-            if (senderId != mqtt_client_id) {
-                Serial.println("--> handleLampMessage: Sender ID is different, proceeding to light up LED (Full).");
-                bool isRainbow = colorStr.equalsIgnoreCase("RAINBOW");
+            Serial.println("--> handleLampMessage (JSON): Sender ID is '" + senderId + "', my ID is '" + mqtt_client_id + "'");
+            if (senderId != mqtt_client_id && senderId.length() > 0) {
+                Serial.println("--> handleLampMessage (JSON): Sender ID is different, proceeding to light up LED.");
+                bool isRainbow = effect.equalsIgnoreCase("rainbow") || colorStr.equalsIgnoreCase("RAINBOW");
+                bool isBlink = effect.equalsIgnoreCase("blink");
                 currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
-                ledTimeout = millis() + 30000; // 30 Sekunden leuchten
+                ledTimeout = millis() + duration;
                 ledActive = true;
                 if (friendlamp_enabled) {
-                    Serial.println("--> handleLampMessage: Starting Fade-In.");
-                    startFadeIn(currentLedColor, 0, isRainbow);
+                    Serial.printf("--> handleLampMessage: Starting effect %s.\n", effect.c_str());
+                    startFadeIn(currentLedColor, 0, isRainbow, isBlink);
                 }
-                Serial.printf("Zwitscherbox: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
             } else {
                 Serial.println("--> handleLampMessage: Ignored own message.");
             }
         } else {
-            Serial.println("--> handleLampMessage: Invalid format for Zwitscherbox. Expected Sender:HexColor");
+            // Legacy Parsing: Erwartetes Format: "ClientID:ColorHEX" (z.B. "ESP32_Zwitscher11:05AB02")
+            int separatorPos = message.indexOf(':');
+            if (separatorPos != -1) {
+                String senderId = message.substring(0, separatorPos);
+                String colorStr = message.substring(separatorPos + 1);
+                
+                Serial.println("--> handleLampMessage (Legacy): Sender ID is '" + senderId + "', my ID is '" + mqtt_client_id + "'");
+                // Reagiere nicht auf die eigene Nachricht
+                if (senderId != mqtt_client_id) {
+                    Serial.println("--> handleLampMessage (Legacy): Sender ID is different, proceeding to light up LED (Full).");
+                    bool isRainbow = colorStr.equalsIgnoreCase("RAINBOW");
+                    currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
+                    ledTimeout = millis() + 30000; // 30 Sekunden leuchten
+                    ledActive = true;
+                    if (friendlamp_enabled) {
+                        Serial.println("--> handleLampMessage: Starting Fade-In.");
+                        startFadeIn(currentLedColor, 0, isRainbow, false);
+                    }
+                    Serial.printf("Zwitscherbox: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
+                } else {
+                    Serial.println("--> handleLampMessage: Ignored own message.");
+                }
+            } else {
+                Serial.println("--> handleLampMessage: Invalid format for Zwitscherbox. Expected Sender:HexColor or valid JSON.");
+            }
         }
     } else if (friendlamp_enabled && strcmp(topic, friendlamp_topic.c_str()) == 0) {
         Serial.println("--> handleLampMessage: Topic matches Freundschaft!");
@@ -1278,9 +1333,15 @@ void loop() {
 
             // Freundschaftslampe: Sende Signal und leuchte auf
             if (friendlamp_enabled) {
-                String payload = mqtt_client_id + ":" + friendlamp_color;
+                JsonDocument doc;
+                doc["client_id"] = mqtt_client_id;
+                doc["color"] = friendlamp_color;
+                doc["effect"] = friendlamp_color.equalsIgnoreCase("RAINBOW") ? "rainbow" : "fade";
+                doc["duration"] = 30000; // 30 sec standard duration
+                String payload;
+                serializeJson(doc, payload);
                 publishMqttLamp(zwitscherbox_topic, payload, false);
-                Serial.println("Zwitscherbox: Sent color " + friendlamp_color + " to topic " + zwitscherbox_topic);
+                Serial.println("Zwitscherbox: Sent JSON to topic " + zwitscherbox_topic + ": " + payload);
             }
 
              if (currentDirectoryIndex >= 0 && !currentMp3Files.empty()) {
