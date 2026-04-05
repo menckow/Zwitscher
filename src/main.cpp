@@ -445,7 +445,17 @@ String getHtmlPage() {
 
     // Sektionen
     page += "<div class='card'><h2>WLAN Einstellungen</h2>";
-    addTextField("WIFI_SSID", "Netzwerk Name", wifi_ssid, "Wie heißt dein normales WLAN zu Hause?");
+    int n = WiFi.scanNetworks();
+    page += "<datalist id='wifi-networks'>";
+    for (int i = 0; i < n; ++i) {
+        page += "<option value='" + WiFi.SSID(i) + "'>";
+    }
+    page += "</datalist>";
+    WiFi.scanDelete();
+
+    page += "<div class='field'><label for='WIFI_SSID'>Netzwerk Name</label>";
+    page += "<input type='text' id='WIFI_SSID' name='WIFI_SSID' value='" + wifi_ssid + "' list='wifi-networks'></div>";
+    page += "<div class='help-text'>Wie heißt dein normales WLAN zu Hause?</div>";
     addPasswordField("WIFI_PASS", "Passwort", wifi_pass, "Das Passwort für dein WLAN, damit die Box online gehen kann.");
     page += "</div>";
 
