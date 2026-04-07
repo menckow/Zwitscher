@@ -427,7 +427,9 @@ const char* DEFAULT_ROOT_CA = \
 "-----END CERTIFICATE-----\n";
 
 String getHtmlPage() {
-    String page = "<html><head><title>Zwitscherbox Konfiguration</title>";
+    String page;
+    page.reserve(12000);
+    page += "<html><head><title>Zwitscherbox Konfiguration</title>";
     page += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
     page += "<meta charset='UTF-8'><style>";
     
@@ -562,7 +564,9 @@ String getHtmlPage() {
 }
 
 String getFileManagerHtml() {
-    String page = "<!DOCTYPE html><html><head><title>Dateimanager</title>";
+    String page;
+    page.reserve(8000);
+    page += "<!DOCTYPE html><html><head><title>Dateimanager</title>";
     page += "<meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
     page += "<style>";
     page += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f0f2f5;color:#1c1e21;margin:0;padding:20px;}";
