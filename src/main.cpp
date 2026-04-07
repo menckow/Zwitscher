@@ -1038,6 +1038,8 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                 Serial.println("--> handleLampMessage (JSON): Sender ID is different, proceeding to light up LED.");
                 bool isRainbow = effect.equalsIgnoreCase("rainbow") || colorStr.equalsIgnoreCase("RAINBOW");
                 bool isBlink = effect.equalsIgnoreCase("blink");
+                
+                if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
                 currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
                 ledTimeout = millis() + duration;
                 ledActive = true;
@@ -1060,6 +1062,8 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                 if (senderId != mqtt_client_id) {
                     Serial.println("--> handleLampMessage (Legacy): Sender ID is different, proceeding to light up LED (Full).");
                     bool isRainbow = colorStr.equalsIgnoreCase("RAINBOW");
+                    
+                    if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
                     currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
                     ledTimeout = millis() + 30000; // 30 Sekunden leuchten
                     ledActive = true;
