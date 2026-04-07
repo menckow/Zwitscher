@@ -505,8 +505,8 @@ String getHtmlPage() {
     addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled, "Nur anhaken, wenn ein LED-Ring angeschlossen ist!");
     addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled, "Vernetzt deine Box über das Internet mit den Boxen deiner Freunde.");
     addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color, "In dieser Farbe leuchten die Lampen deiner Freunde, wenn DU vor deiner Box stehst.");
-    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Empfangen der Signale deiner Freunde.");
-    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden deines eigenen Signals.");
+    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Freundschaftslampe haben.");
+    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Zwitscherbox haben.");
     addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
     addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
     addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness, "Maximale Helligkeit des LED-Rings.");
