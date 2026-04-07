@@ -43,9 +43,10 @@ const int PIR_PIN = 18;
 const int SD_CS_PIN = SS;
 const int BUTTON_PIN = 17; //38
 const int LED_PIN = 16;
-const int LED_COUNT = 16;
+const int DEFAULT_LED_COUNT = 16;
+int led_count = DEFAULT_LED_COUNT;
 
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip(DEFAULT_LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // --- Timeout-Konstanten ---
 const unsigned long maxPlaybackDuration = 5 * 60 * 1000UL;
@@ -511,6 +512,7 @@ String getHtmlPage() {
     addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
     addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
     addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness, "Maximale Helligkeit des LED-Rings.");
+    addNumberField("LED_COUNT", "Anzahl NeoPixel LEDs", led_count, "Anzahl der verlöteten LEDs auf dem verbauten Ring.");
     page += "</div>";
 
     page += "<div class='card'><h2>Externer Broker (Optional)</h2>";
@@ -640,6 +642,7 @@ void handleSave(AsyncWebServerRequest *request) {
     writeCheckbox("LED_FADE_EFFECT", "LED_FADE_EFFECT");
     writeParam("LED_FADE_DURATION", "LED_FADE_DURATION");
     writeParam("LED_BRIGHTNESS", "LED_BRIGHTNESS");
+    writeParam("LED_COUNT", "LED_COUNT");
 
     // Externer Broker
     writeParam("FRIENDLAMP_MQTT_SERVER", "FRIENDLAMP_MQTT_SERVER");
@@ -885,6 +888,11 @@ void loadConfig() {
             int new_brightness = value.toInt();
             if (new_brightness >= 0 && new_brightness <= 255) {
                 led_brightness = new_brightness;
+            }
+        } else if (key == "LED_COUNT") {
+            int new_count = value.toInt();
+            if (new_count > 0) {
+                led_count = new_count;
             }
         }
     }
@@ -1386,6 +1394,7 @@ void setup() {
 
     // --- LED_Ring Setup ---
     if (friendlamp_enabled) {
+        strip.updateLength(led_count > 0 ? led_count : DEFAULT_LED_COUNT);
         strip.begin();
         strip.show(); // Initialize all pixels to 'off'
         strip.setBrightness(led_brightness); // Set brightness from config
