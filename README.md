@@ -158,7 +158,7 @@ A standard JSON packet from the sender (or your smart home system) looks like th
 
 - **`client_id` (string):** The unique name of the device playing the content (used to ensure the box does not respond to its own messages and to prevent infinite loops).
 
-- **`color` (string):** The HEX colour code (e.g. `00FF00` for green). If the word `RAINBOW` is passed as the colour, the hidden, circular light effect starts.
+- **`color` (string):** The HEX colour code (e.g. `00FF00` or `#00FF00` for green). If the word `RAINBOW` is passed as the colour, the hidden, circular light effect starts.
 - **`effect` (string):** Controls the animation behaviour of the NeoPixel LEDs. Supported values are `‘fade’` (soft fade), `“blink”` (flashing once per second in time with the beat) and `‘rainbow’`.
 - **`duration` (Integer):** Time in milliseconds for how long the LEDs should remain lit before switching off automatically (default: `30000` = 30 seconds). This allows Home Assistant to perfectly control the duration of the visual signals depending on the application scenario (e.g. short alarm vs. long background lighting).
 
