@@ -43,7 +43,7 @@ const int PIR_PIN = 18;
 const int SD_CS_PIN = SS;
 const int BUTTON_PIN = 17; //38
 const int LED_PIN = 16;
-const int LED_COUNT = 8;
+const int LED_COUNT = 16;
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -59,6 +59,7 @@ Preferences preferences; // NEU: Objekt für NVS
 // --- Variablen für Konfiguration und MQTT ---
 String wifi_ssid = "";
 String wifi_pass = "";
+String admin_pass = ""; // Webinterface Password
 String mqtt_server = "";
 int    mqtt_port = 1883; // Standard-Port
 String mqtt_user = "";
@@ -486,6 +487,10 @@ String getHtmlPage() {
     addPasswordField("WIFI_PASS", "Passwort", wifi_pass, "Das Passwort für dein WLAN, damit die Box online gehen kann.");
     page += "</div>";
 
+    page += "<div class='card'><h2>Administrator & Sicherheit</h2>";
+    addPasswordField("ADMIN_PASS", "Webinterface Passwort", admin_pass, "Sichert diese Weboberfläche mit einem Passwort ab (optional, Nutzername ist immer 'admin').");
+    page += "</div>";
+
     page += "<div class='card'><h2>Home Assistant (MQTT)</h2>";
     addCheckbox("MQTT_INTEGRATION", "MQTT Aktivieren", homeassistant_mqtt_enabled, "Aktiviert die Steuerung und Statusmeldungen für Smart Home Systeme.");
     addTextField("MQTT_SERVER", "Broker Adresse", mqtt_server);
@@ -548,6 +553,9 @@ void handleSave(AsyncWebServerRequest *request) {
     writeParam("WIFI_SSID", "WIFI_SSID");
     writeParam("WIFI_PASS", "WIFI_PASS");
     
+    // Administrator
+    writeParam("ADMIN_PASS", "ADMIN_PASS");
+
     // Home Assistant
     writeCheckbox("MQTT_INTEGRATION", "MQTT_INTEGRATION");
     writeParam("MQTT_SERVER", "MQTT_SERVER");
@@ -597,12 +605,23 @@ void handleSave(AsyncWebServerRequest *request) {
 
 void setupWebServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
+        return request->requestAuthentication();
+    }
     request->send(200, "text/html", getHtmlPage());
   });
 
-  server.on("/save", HTTP_POST, handleSave);
+  server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
+    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
+        return request->requestAuthentication();
+    }
+    handleSave(request);
+  });
   
   server.onNotFound([](AsyncWebServerRequest *request) {
+    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
+        return request->requestAuthentication();
+    }
     request->send(200, "text/html", getHtmlPage());
   });
 
@@ -680,7 +699,9 @@ void loadConfig() {
         value.trim();
         key.toUpperCase();
 
-        if (key == "WIFI_SSID") {
+        if (key == "ADMIN_PASS") {
+            admin_pass = value;
+        } else if (key == "WIFI_SSID") {
             wifi_ssid = value;
         } else if (key == "WIFI_PASS") {
             wifi_pass = value;
