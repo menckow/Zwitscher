@@ -323,41 +323,72 @@ void updateFade() {
 }
 void handleFreundschaftMessage(String payload) {
     Serial.println("--> handleFreundschaftMessage: Received " + payload);
-    if (payload.equalsIgnoreCase("RAINBOW")) {
-        startFadeIn(0, 0, true);
-        ledTimeout = millis() + 30000;
-        ledActive = true; 
+
+    String colorStr = "";
+    String effect = "fade";
+    long duration = 30000;
+    String senderId = "";
+    uint32_t parsedColor = 0;
+    bool hasLegacyRGB = false;
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, payload);
+    
+    if (!error && !doc["client_id"].isNull()) {
+        senderId = doc["client_id"] | "";
+        colorStr = doc["color"] | "";
+        effect = doc["effect"] | "fade";
+        duration = doc["duration"] | 30000;
+    } else {
+        if (payload.equalsIgnoreCase("RAINBOW")) {
+            colorStr = "RAINBOW";
+        } else {
+            // Legacy "r,g,b"
+            int firstComma = payload.indexOf(',');
+            int secondComma = payload.lastIndexOf(',');
+            if (firstComma != -1 && secondComma != -1 && firstComma != secondComma) {
+                int r = payload.substring(0, firstComma).toInt();
+                int g = payload.substring(firstComma + 1, secondComma).toInt();
+                int b = payload.substring(secondComma + 1).toInt();
+                parsedColor = strip.Color(r, g, b);
+                hasLegacyRGB = true;
+            } else {
+                // Legacy "Sender:HEX" or raw HEX
+                int colonPos = payload.indexOf(':');
+                if (colonPos != -1) {
+                    senderId = payload.substring(0, colonPos);
+                    colorStr = payload.substring(colonPos + 1);
+                } else {
+                    colorStr = payload;
+                }
+            }
+        }
+    }
+
+    if (senderId.length() > 0 && senderId == mqtt_client_id) {
+        Serial.println("--> handleFreundschaftMessage: Ignored own message.");
         return;
     }
-    // Parse payload "xxx,yyy,zzz"
-    int firstComma = payload.indexOf(',');
-    int secondComma = payload.lastIndexOf(',');
-    if (firstComma != -1 && secondComma != -1 && firstComma != secondComma) {
-        String r_str = payload.substring(0, firstComma);
-        String g_str = payload.substring(firstComma + 1, secondComma);
-        String b_str = payload.substring(secondComma + 1);
-        int r = r_str.toInt();
-        int g = g_str.toInt();
-        int b = b_str.toInt();
-        
-        // Basic validation
-        if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255) {
-            uint32_t color = strip.Color(r, g, b);
-            fadeColor = color; // Set global fade color for fade-out
-            Serial.printf("--> handleFreundschaftMessage: Parsed color (%d, %d, %d)\n", r, g, b);
-            
-            // HIER DIE ÄNDERUNG: Nutze startFadeIn mit Mode = 1 (Komplementär-Muster)
-            startFadeIn(color, 1);
-            
-            // Similar to the other lamp, let's have it on for a while
-            ledTimeout = millis() + 30000; // 30 Sekunden leuchten
-            ledActive = true; 
-        } else {
-            Serial.println("--> handleFreundschaftMessage: Invalid color values in payload.");
-        }
+
+    bool isRainbow = effect.equalsIgnoreCase("rainbow") || colorStr.equalsIgnoreCase("RAINBOW");
+    bool isBlink = effect.equalsIgnoreCase("blink");
+    
+    uint32_t finalColor = 0;
+    if (isRainbow) {
+        finalColor = 0;
+    } else if (hasLegacyRGB) {
+        finalColor = parsedColor;
     } else {
-        Serial.println("--> handleFreundschaftMessage: Invalid payload format. Expected r,g,b");
+        if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
+        finalColor = strtol(colorStr.c_str(), NULL, 16);
     }
+    
+    fadeColor = finalColor;
+    Serial.printf("--> handleFreundschaftMessage: Activated 3rd LED mode. final value: %u\n", finalColor);
+
+    startFadeIn(finalColor, 1, isRainbow, isBlink);
+    ledTimeout = millis() + duration;
+    ledActive = true; 
 }
 // --- Funktion zum Laden der Konfiguration von SD ---
 
