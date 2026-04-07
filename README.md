@@ -35,7 +35,8 @@ A smart, directory-based MP3 player based on the **ESP32-S3 (YB-ESP32-S3-AMP)** 
     - Both can be enabled independently of one another. The device remains completely offline when both are disabled.
   - Connects via WiFi and sends real-time status updates via MQTT (volume, playback status, errors, current IP).
 - **Timeouts:** The maximum playback duration for a random session is limited to 5 minutes to prevent endless playback.
-- **Web configuration portal:** If a valid Wi-Fi connection cannot be established, the device launches its own password-protected access point (`Zwitscherbox`, **Password: `12345678`**). All settings can be conveniently configured via a web interface using drop-down menus (including a Wi-Fi scanner), without having to manually edit the SD card. The colour of the friendship lamp can be set particularly intuitively using a visual HTML colour picker.
+- **Web configuration portal:** If a valid Wi-Fi connection cannot be established, the device launches its own password-protected access point (`Zwitscherbox`, **Password: `12345678`**). All settings can be conveniently configured via a web interface using drop-down menus (including a Wi-Fi scanner), without having to manually edit the SD card. The colour of the friendship lamp can be set particularly intuitively using a visual HTML colour picker. You can optionally secure this UI with a permanent administrator password.
+- **SD Card File Manager:** The web interface also includes a fully-fledged `/files` file manager endpoint! This enables you to directly navigate the SD card directory, create new folders, delete files, and upload new MP3s over Wi-Fi without having to physically remove the SD card from the ESP32. Large MP3 files are smoothly transferred using asynchronous, memory-safe data chunks along with a live progress bar.
 ## 🛠 Hardware requirements
 
 - **Board:** YB-ESP32-S3-AMP (based on Arduino ESP32 core >= v3.1.1)

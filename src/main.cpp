@@ -424,6 +424,7 @@ String getHtmlPage() {
     
     page += "</style></head><body>";
     page += "<h1>Zwitscherbox</h1>";
+    page += "<div style='text-align:center;margin-bottom:20px;'><a href='/files' style='display:inline-block;background:#1976D2;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:bold;'>🎵 Zum SD-Karten Dateimanager</a></div>";
     page += "<form action='/save' method='POST'>";
 
     // Hilfsfunktionen (angepasst an das neue Layout mit Erklärungen)
@@ -527,6 +528,66 @@ String getHtmlPage() {
     return page;
 }
 
+String getFileManagerHtml() {
+    String page = "<!DOCTYPE html><html><head><title>Dateimanager</title>";
+    page += "<meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+    page += "<style>";
+    page += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f0f2f5;color:#1c1e21;margin:0;padding:20px;}";
+    page += "h1{color:#2e7d32;margin-bottom:10px;}";
+    page += ".card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 4px rgba(0,0,0,0.1);margin-bottom:20px;}";
+    page += ".btn{background:#2e7d32;color:white;padding:10px 15px;border:none;border-radius:8px;cursor:pointer;font-weight:bold;margin-right:10px;}";
+    page += ".btn-danger{background:#d32f2f;}";
+    page += "li{padding:10px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;}";
+    page += "ul{list-style:none;padding:0;}";
+    page += "#progress{width:100%;background:#e0e0e0;border-radius:8px;margin-top:10px;display:none;}";
+    page += "#bar{width:0%;height:20px;background:#4CAF50;border-radius:8px;}";
+    page += "input[type=file], input[type=text]{padding:10px;margin-bottom:10px;width:calc(100% - 20px);border:1px solid #ccc;border-radius:8px;}";
+    page += "</style></head><body>";
+    page += "<div class='card'>";
+    page += "<div style='display:flex;justify-content:space-between;align-items:center;'><h1>SD-Karten Manager</h1><a href='/' class='btn' style='text-decoration:none;'>Setup</a></div>";
+    page += "<h3>Aktueller Pfad: <span id='currentPath'>/</span></h3>";
+    page += "<button class='btn' onclick='loadDir(\"/\")'>Root</button>";
+    page += "<button class='btn' onclick='goUp()'>Nach Oben</button></div>";
+
+    page += "<div class='card'><h3>📂 Ordner erstellen</h3>";
+    page += "<input type='text' id='newDirName' placeholder='Name des neuen Ordners'>";
+    page += "<button class='btn' onclick='createFolder()'>Erstellen</button></div>";
+
+    page += "<div class='card'><h3>⬆️ MP3 Hochladen</h3>";
+    page += "<input type='file' id='fileInput'>";
+    page += "<button class='btn' onclick='uploadFile()'>Hochladen</button>";
+    page += "<div id='progress'><div id='bar'></div></div></div>";
+
+    page += "<div class='card'><h3>Inhalt</h3>";
+    page += "<ul id='fileList'><li>Lade...</li></ul></div>";
+
+    page += "<script>";
+    page += "let currentPath = '/';";
+    page += "function goUp() { let parts = currentPath.split('/'); parts.pop(); parts.pop(); let p = parts.join('/') + '/'; loadDir(p.length > 1 ? p : '/'); }";
+    page += "function loadDir(path) { currentPath = path.endsWith('/') ? path : path + '/'; document.getElementById('currentPath').innerText = currentPath;";
+    page += "fetch('/api/list?dir=' + encodeURIComponent(currentPath)).then(r=>r.json()).then(data=>{";
+    page += "let html=''; data.forEach(item=>{";
+    page += "let isDir = item.isDir; let size = item.size?Math.round(item.size/1024)+' KB':'';";
+    page += "let icon = isDir ? '📁' : '🎵';";
+    page += "let action = isDir ? `<button class='btn' onclick='loadDir(\"${currentPath}${item.name}\")'>&Ouml;ffnen</button>` : '';";
+    page += "html+=`<li><span>${icon} ${item.name} <small>${size}</small></span><div>${action}<button class='btn btn-danger' onclick='deleteItem(\"${currentPath}${item.name}\")'>X</button></div></li>`;";
+    page += "}); document.getElementById('fileList').innerHTML=html; }); }";
+    
+    page += "function deleteItem(path) { if(confirm('Sicher l\\u00f6schen? ' + path)){ fetch('/api/delete?path='+encodeURIComponent(path),{method:'DELETE'}).then(r=>{if(r.ok)loadDir(currentPath);else alert('Fehler beim L\\u00f6schen');}); } }";
+    
+    page += "function createFolder() { let name = document.getElementById('newDirName').value; if(name){ fetch('/api/mkdir?path='+encodeURIComponent(currentPath+name),{method:'POST'}).then(r=>{if(r.ok){document.getElementById('newDirName').value='';loadDir(currentPath);}else alert('Fehler');}); } }";
+    
+    page += "function uploadFile() { let file = document.getElementById('fileInput').files[0]; if(!file)return; let data = new FormData(); data.append('file', file, currentPath + file.name);";
+    page += "let r = new XMLHttpRequest(); r.open('POST', '/api/upload');";
+    page += "r.upload.onprogress = function(e){ if(e.lengthComputable){ document.getElementById('progress').style.display='block'; let p = (e.loaded/e.total)*100; document.getElementById('bar').style.width=Math.round(p)+'%'; } };";
+    page += "r.onload = function(){ document.getElementById('progress').style.display='none'; document.getElementById('bar').style.width='0%'; loadDir(currentPath); };";
+    page += "r.send(data); }";
+
+    page += "window.onload = function() { loadDir('/'); };";
+    page += "</script></body></html>";
+    return page;
+}
+
 void handleSave(AsyncWebServerRequest *request) {
     File configFile = SD.open("/config.txt", FILE_WRITE);
     if (!configFile) {
@@ -603,25 +664,99 @@ void handleSave(AsyncWebServerRequest *request) {
     restartTime = millis() + 2000; // Dem Server 2 Sekunden Zeit geben, die Seite zu schicken
 }
 
+bool checkAuth(AsyncWebServerRequest *request) {
+    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
+        request->requestAuthentication();
+        return false;
+    }
+    return true;
+}
+
 void setupWebServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
-        return request->requestAuthentication();
-    }
+    if (!checkAuth(request)) return;
     request->send(200, "text/html", getHtmlPage());
   });
 
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
-    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
-        return request->requestAuthentication();
-    }
+    if (!checkAuth(request)) return;
     handleSave(request);
+  });
+
+  server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
+    request->send(200, "text/html", getFileManagerHtml());
+  });
+
+  server.on("/api/list", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
+    String dirPath = request->hasParam("dir") ? request->getParam("dir")->value() : "/";
+    File dir = SD.open(dirPath);
+    if (!dir || !dir.isDirectory()) return request->send(400, "application/json", "[]");
+    String json = "[";
+    File file = dir.openNextFile();
+    bool first = true;
+    while(file){
+        if(!first) json += ",";
+        String name = file.name();
+        if(name.lastIndexOf('/') >= 0) name = name.substring(name.lastIndexOf('/')+1);
+        json += "{\"name\":\"" + name + "\",\"isDir\":" + (file.isDirectory()?"true":"false") + ",\"size\":" + String(file.size()) + "}";
+        first = false;
+        file = dir.openNextFile();
+    }
+    json += "]";
+    request->send(200, "application/json", json);
+  });
+
+  server.on("/api/mkdir", HTTP_POST, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
+    if(request->hasParam("path")){
+        String path = request->getParam("path")->value();
+        if(SD.mkdir(path)) request->send(200);
+        else request->send(500);
+    } else request->send(400);
+  });
+
+  server.on("/api/delete", HTTP_DELETE, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
+    if(request->hasParam("path")){
+        String path = request->getParam("path")->value();
+        File f = SD.open(path);
+        bool success = false;
+        if(f){
+            bool isDir = f.isDirectory();
+            f.close();
+            if(isDir) success = SD.rmdir(path);
+            else success = SD.remove(path);
+        }
+        if(success) request->send(200);
+        else request->send(500);
+    } else request->send(400);
+  });
+
+  server.on("/api/upload", HTTP_POST, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
+    request->send(200, "text/plain", "Upload done");
+  }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) return;
+    File *f = (File *)request->_tempObject;
+    if(!index){
+        if(!filename.startsWith("/")) filename = "/" + filename;
+        f = new File(SD.open(filename, FILE_WRITE));
+        request->_tempObject = (void*)f;
+    }
+    if (f) {
+        if(len) f->write(data, len);
+        if(final){
+            f->close();
+            delete f;
+            request->_tempObject = NULL;
+        }
+    }
   });
   
   server.onNotFound([](AsyncWebServerRequest *request) {
-    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
-        return request->requestAuthentication();
-    }
+    if (!checkAuth(request)) return;
     request->send(200, "text/html", getHtmlPage());
   });
 
