@@ -166,7 +166,7 @@ Ein Standard JSON-Paket (von der Freundschaftslampe oder dem Smart Home System) 
 
 ### 🔄 OTA Update via MQTT
 
-Die Firmware kann Over-The-Air (OTA) über MQTT aktualisiert werden. Sende dazu ein JSON-Paket an das Topic `[ZWITSCHERBOX_TOPIC]/update/trigger` (bzw. an das von dir konfigurierte Topic):
+Die Firmware kann Over-The-Air (OTA) über MQTT aktualisiert werden. Sende dazu ein JSON-Paket an das statische Topic `zwitscherbox/update/trigger` (dies ist unabhängig von deinen Topic-Einstellungen in der config.txt):
 
 ```json
 {
@@ -175,7 +175,7 @@ Die Firmware kann Over-The-Air (OTA) über MQTT aktualisiert werden. Sende dazu 
 }
 ```
 
-Wenn die ankommende `version` von der aktuellen `FW_VERSION` im Quellcode abweicht, stoppt das Gerät die Audiowiedergabe, lässt den LED-Ring konstant blau leuchten und beginnt mit dem Firmware-Download. Der Fortschritt und der aktuelle Status werden auf dem Topic `[ZWITSCHERBOX_TOPIC]/update/status` veröffentlicht. Nach erfolgreicher Installation startet das Gerät automatisch neu. Bei einem Fehler blinken die LEDs kurz rot auf und eine entsprechende Fehlermeldung wird per MQTT abgesetzt.
+Wenn die ankommende `version` von der aktuellen `FW_VERSION` im Quellcode abweicht, stoppt das Gerät die Audiowiedergabe, lässt den LED-Ring konstant blau leuchten und beginnt mit dem Firmware-Download. Der Fortschritt und der aktuelle Status werden auf dem festen Topic `zwitscherbox/update/status` veröffentlicht. Die Payload enthält dabei neben der Meldung auch immer die Version und die Client-ID im Format `V7.0.0:ESP32_AudioPlayer - Meldung`. Nach erfolgreicher Installation startet das Gerät automatisch neu. Bei einem Fehler blinken die LEDs kurz rot auf und eine entsprechende Fehlermeldung wird per MQTT abgesetzt.
 
 ## 📄 Lizenz
 

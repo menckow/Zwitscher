@@ -1067,8 +1067,8 @@ void performOtaUpdate(const char* url, const char* version) {
         playing = false; playingIntro = false; inPlaybackSession = false;
     }
 
-    String statusTopic = zwitscherbox_topic + "/update/status";
-    String startMsg = "Updating from " + String(FW_VERSION) + " to " + String(version);
+    String statusTopic = "zwitscherbox/update/status";
+    String startMsg = "V" + String(FW_VERSION) + ":" + String(mqtt_client_id) + " - Updating to " + String(version);
     
     if (homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), startMsg.c_str(), false);
     if (friendlamp_mqtt_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), startMsg.c_str(), false);
@@ -1098,7 +1098,7 @@ void performOtaUpdate(const char* url, const char* version) {
 
     switch (ret) {
         case HTTP_UPDATE_FAILED: {
-            String errorMsg = "Update failed: " + httpUpdate.getLastErrorString();
+            String errorMsg = "V" + String(FW_VERSION) + ":" + String(mqtt_client_id) + " - Update failed: " + httpUpdate.getLastErrorString();
             Serial.println(errorMsg);
             if (homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), errorMsg.c_str(), false);
             if (friendlamp_mqtt_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
@@ -1118,7 +1118,7 @@ void performOtaUpdate(const char* url, const char* version) {
             break;
         case HTTP_UPDATE_OK: {
             Serial.println("Update erfolgreich! ESP32 startet neu...");
-            String okMsg = "Success! Rebooting...";
+            String okMsg = "V" + String(FW_VERSION) + ":" + String(mqtt_client_id) + " - Success! Rebooting...";
             if (homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), okMsg.c_str(), false);
             if (friendlamp_mqtt_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), okMsg.c_str(), false);
             delay(1000);
@@ -1137,7 +1137,7 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
     }
     Serial.printf("Friendlamp MQTT Received [%s]: %s\n", topic, message.c_str());
 
-    String otaTriggerTopic = zwitscherbox_topic + "/update/trigger";
+    String otaTriggerTopic = "zwitscherbox/update/trigger";
     if (strcmp(topic, otaTriggerTopic.c_str()) == 0) {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, message);
@@ -1148,8 +1148,8 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                 if (strcmp(version, FW_VERSION) != 0) {
                     performOtaUpdate(url, version);
                 } else {
-                    String statusTopic = zwitscherbox_topic + "/update/status";
-                    String okMsg = "Already up to date";
+                    String statusTopic = "zwitscherbox/update/status";
+                    String okMsg = "V" + String(FW_VERSION) + ":" + String(mqtt_client_id) + " - Already up to date";
                     if (homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), okMsg.c_str(), false);
                     if (friendlamp_mqtt_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), okMsg.c_str(), false);
                 }
@@ -1257,8 +1257,8 @@ void mqtt_reconnect() {
             publishMqtt(mqtt_topic_ip, WiFi.localIP().toString(), true);
             publishMqtt(mqtt_topic_status, "Online", true); 
              // Immer OTA Update Trigger Topic abonnieren
-             mqttClient.subscribe((zwitscherbox_topic + "/update/trigger").c_str());
-             mqttClient.publish((zwitscherbox_topic + "/update/status").c_str(), ("V" + String(FW_VERSION) + " online").c_str(), false);
+             mqttClient.subscribe("zwitscherbox/update/trigger");
+             mqttClient.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(mqtt_client_id)).c_str(), false);
              
              // Subscribe auf dem internen Broker für die Lampe, falls diese auch dort läuft
              if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server == "") {
@@ -1294,8 +1294,8 @@ void mqtt_reconnect() {
                 Serial.println("--> LAMP MQTT: Subscribing to topics: " + friendlamp_topic + " and " + zwitscherbox_topic);
                 mqttClientLamp.subscribe(friendlamp_topic.c_str());
                 mqttClientLamp.subscribe(zwitscherbox_topic.c_str());
-                mqttClientLamp.subscribe((zwitscherbox_topic + "/update/trigger").c_str());
-                mqttClientLamp.publish((zwitscherbox_topic + "/update/status").c_str(), ("V" + String(FW_VERSION) + " online via Lamp").c_str(), false);
+                mqttClientLamp.subscribe("zwitscherbox/update/trigger");
+                mqttClientLamp.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(mqtt_client_id)).c_str(), false);
             } else {
                 Serial.print("failed, rc=");
                 Serial.print(mqttClientLamp.state());

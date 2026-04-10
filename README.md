@@ -164,7 +164,7 @@ A standard JSON packet from the sender (or your smart home system) looks like th
 
 ### 🔄 OTA Update via MQTT
 
-The hardware also supports Over-The-Air (OTA) firmware updates triggered over MQTT. Send a JSON payload to the `[ZWITSCHERBOX_TOPIC]/update/trigger` topic (or your customized topic name):
+The hardware also supports Over-The-Air (OTA) firmware updates triggered over MQTT. Send a JSON payload to the `zwitscherbox/update/trigger` topic (this is a static topic, independent of your topic configuration):
 
 ```json
 {
@@ -173,7 +173,7 @@ The hardware also supports Over-The-Air (OTA) firmware updates triggered over MQ
 }
 ```
 
-If the `version` in the payload differs from the current `FW_VERSION` defined in the source code, the device will pause all active audio playback, illuminate the LED ring in solid blue, and begin downloading the firmware. Progress and status updates will be published to the `[ZWITSCHERBOX_TOPIC]/update/status` topic. Upon successful installation, the device will automatically reboot. Should the update fail, the LEDs will briefly pulse red and an error message will be published to the status topic.
+If the `version` in the payload differs from the current `FW_VERSION` defined in the source code, the device will pause all active audio playback, illuminate the LED ring in solid blue, and begin downloading the firmware. Progress and status updates will be published to the `zwitscherbox/update/status` topic (format: `V7.0.0:ESP_Client_ID`). Upon successful installation, the device will automatically reboot. Should the update fail, the LEDs will briefly pulse red and an error message will be published to the status topic.
 
 ## 📄 Licence
 
