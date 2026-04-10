@@ -11,6 +11,7 @@ A smart, directory-based MP3 player based on the **ESP32-S3 (YB-ESP32-S3-AMP)** 
 - **Configurable LED effects** (brightness, fade duration).
 - **NVS memory** for volume and last folder to retain state after standby.
 - **Integrated web portal** for easy configuration in the event of connection issues (including visual colour selection for the LED).
+- **Central Device Management:** Fully compatible with the **Lamp Manager Dashboard**. Supports real-time status, version reporting, and Last Will (LWT) for offline detection.
 
 ## 🌟 Detailed features
 
@@ -173,7 +174,7 @@ The hardware also supports Over-The-Air (OTA) firmware updates triggered over MQ
 }
 ```
 
-If the `version` in the payload differs from the current `FW_VERSION` defined in the source code, the device will pause all active audio playback, illuminate the LED ring in solid blue, and begin downloading the firmware. Progress and status updates will be published to the `zwitscherbox/update/status` topic (format: `V7.0.0:ESP_Client_ID`). Upon successful installation, the device will automatically reboot. Should the update fail, the LEDs will briefly pulse red and an error message will be published to the status topic.
+If the `version` in the payload differs from the current `FW_VERSION` in the source code, the device will pause all active audio playback, illuminate the LED ring in solid blue, and begin downloading the firmware. Detailed progress and status updates will be published to the individual status topic `zwitscherbox/status/<ClientID>` and a general log topic `zwitscherbox/update/status`. Upon successful installation, the device will automatically reboot. Should the update fail, the LEDs will briefly pulse red and an error message will be published to the status topic.
 
 ## 📄 Licence
 

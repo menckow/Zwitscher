@@ -11,6 +11,7 @@ Ein intelligenter, ordner-basierter MP3-Player basierend auf dem **ESP32-S3 (YB-
 - **Konfigurierbare LED-Effekte** (Helligkeit, Fade-Dauer).
 - **NVS-Speicher** für Lautstärke und den letzten Ordner, um den Status nach einem Standby beizubehalten.
 - **Integriertes Webportal** zur einfachen Konfiguration bei Verbindungsproblemen (inklusive visueller Farbauswahl für die LED).
+- **Zentrales Management:** Volle Kompatibilität mit dem **Device Manager (Dashboard)**. Unterstützt Echtzeit-Status, Versions-Reporting und Last Will (LWT) zur Offline-Erkennung.
 
 ## 🌟 Detaillierte Funktionen
 
@@ -175,7 +176,7 @@ Die Firmware kann Over-The-Air (OTA) über MQTT aktualisiert werden. Sende dazu 
 }
 ```
 
-Wenn die ankommende `version` von der aktuellen `FW_VERSION` im Quellcode abweicht, stoppt das Gerät die Audiowiedergabe, lässt den LED-Ring konstant blau leuchten und beginnt mit dem Firmware-Download. Der Fortschritt und der aktuelle Status werden auf dem festen Topic `zwitscherbox/update/status` veröffentlicht. Die Payload enthält dabei neben der Meldung auch immer die Version und die Client-ID im Format `V7.0.0:ESP32_AudioPlayer - Meldung`. Nach erfolgreicher Installation startet das Gerät automatisch neu. Bei einem Fehler blinken die LEDs kurz rot auf und eine entsprechende Fehlermeldung wird per MQTT abgesetzt.
+Wenn die ankommende `version` von der aktuellen `FW_VERSION` im Quellcode abweicht, stoppt das Gerät die Audiowiedergabe, lässt den LED-Ring konstant blau leuchten und beginnt mit dem Firmware-Download. Der detaillierte Fortschritt und der aktuelle Status werden auf dem individuellen Status-Topic `zwitscherbox/status/<ClientID>` sowie dem Log-Topic `zwitscherbox/update/status` veröffentlicht. Nach erfolgreicher Installation startet das Gerät automatisch neu. Bei einem Fehler blinken die LEDs kurz rot auf und eine entsprechende Fehlermeldung wird per MQTT abgesetzt.
 
 ## 📄 Lizenz
 
@@ -192,7 +193,7 @@ E (3637) rmt: rmt_new_tx_channel(269): unable to power down into light sleep
 [  3664][E][esp32-hal-rmt.c:548] rmtInit(): GPIO 16 - RMT TX initialisation error.
 ```
 
-- **Ursache:** Dieser Fehler wird durch einen Bug in älteren Versionen des ESP32 Frameworks (Arduino Core) für PlatformIO verursacht. Der per NeoPixel-Bibliothek verwendete RMT-Treiber hat ein Kompatibilitätsproblem mit dem Energiesparmodus der MCU.
+- **Ursache:** Dieser Fehler wird durch einen Bug in älteren Versionen des ESP32 Frameworks (Arduino Core) for PlatformIO verursacht. Der per NeoPixel-Bibliothek verwendete RMT-Treiber hat ein Kompatibilitätsproblem mit dem Energiesparmodus der MCU.
 
 - **Lösung:** Um diesen Fehler zu beheben, wurde die `platformio.ini` geändert. Der Plattformlink wurde auf ein Github Repository gesetzt, um eine verlässliche und gepatchte Version des Frameworks zu nutzen, welche zudem auch die Board-Definitionen für das YB-ESP32-S3-AMP mitbringt.
 
