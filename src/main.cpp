@@ -1077,7 +1077,10 @@ void performOtaUpdate(const char* url, const char* version) {
     otaClient.setInsecure();
 
     if (friendlamp_enabled) {
-        startFadeIn(strip.Color(0, 0, 255), 0);
+        for (int i = 0; i < strip.numPixels(); i++) {
+            strip.setPixelColor(i, strip.Color(0, 0, 255));
+        }
+        strip.show();
     }
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
@@ -1100,9 +1103,13 @@ void performOtaUpdate(const char* url, const char* version) {
             if (homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), errorMsg.c_str(), false);
             if (friendlamp_mqtt_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
             if (friendlamp_enabled) {
-                startFadeIn(strip.Color(255, 0, 0), 0);
+                for (int i = 0; i < strip.numPixels(); i++) {
+                    strip.setPixelColor(i, strip.Color(255, 0, 0));
+                }
+                strip.show();
                 delay(2000);
-                startFadeIn(0, 0);
+                strip.clear();
+                strip.show();
             }
             break;
         }
