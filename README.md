@@ -162,6 +162,19 @@ A standard JSON packet from the sender (or your smart home system) looks like th
 - **`effect` (string):** Controls the animation behaviour of the NeoPixel LEDs. Supported values are `‘fade’` (soft fade), `“blink”` (flashing once per second in time with the beat) and `‘rainbow’`.
 - **`duration` (Integer):** Time in milliseconds for how long the LEDs should remain lit before switching off automatically (default: `30000` = 30 seconds). This allows Home Assistant to perfectly control the duration of the visual signals depending on the application scenario (e.g. short alarm vs. long background lighting).
 
+### 🔄 OTA Update via MQTT
+
+The hardware also supports Over-The-Air (OTA) firmware updates triggered over MQTT. Send a JSON payload to the `[ZWITSCHERBOX_TOPIC]/update/trigger` topic (or your customized topic name):
+
+```json
+{
+  "url": "http://your-server.com/firmware.bin",
+  "version": "7.0.1"
+}
+```
+
+If the `version` in the payload differs from the current `FW_VERSION` defined in the source code, the device will pause all active audio playback, illuminate the LED ring in solid blue, and begin downloading the firmware. Progress and status updates will be published to the `[ZWITSCHERBOX_TOPIC]/update/status` topic. Upon successful installation, the device will automatically reboot. Should the update fail, the LEDs will briefly pulse red and an error message will be published to the status topic.
+
 ## 📄 Licence
 
 This project was developed exclusively as a private/open-source solution. 

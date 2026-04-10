@@ -164,6 +164,19 @@ Ein Standard JSON-Paket (von der Freundschaftslampe oder dem Smart Home System) 
 - **`effect` (string):** Steuert das Animationsverhalten der NeoPixel LEDs. Unterstützt werden `fade` (weiches Einblenden), `blink` (1x pro Sekunde im Takt) und `rainbow`.
 - **`duration` (Integer):** Zeit in Millisekunden für die Dauer des Aufleuchtens, bevor sich die LEDs wieder abschalten (Standard: `30000` = 30 Sekunden). Dies ermöglicht es Home Assistant, die Dauer der Signale perfekt dem Anwendungsszenario anzugleichen (kurzer Alarm vs. langes Hintergrundlicht).
 
+### 🔄 OTA Update via MQTT
+
+Die Firmware kann Over-The-Air (OTA) über MQTT aktualisiert werden. Sende dazu ein JSON-Paket an das Topic `[ZWITSCHERBOX_TOPIC]/update/trigger` (bzw. an das von dir konfigurierte Topic):
+
+```json
+{
+  "url": "http://dein-server.de/firmware.bin",
+  "version": "7.0.1"
+}
+```
+
+Wenn die ankommende `version` von der aktuellen `FW_VERSION` im Quellcode abweicht, stoppt das Gerät die Audiowiedergabe, lässt den LED-Ring konstant blau leuchten und beginnt mit dem Firmware-Download. Der Fortschritt und der aktuelle Status werden auf dem Topic `[ZWITSCHERBOX_TOPIC]/update/status` veröffentlicht. Nach erfolgreicher Installation startet das Gerät automatisch neu. Bei einem Fehler blinken die LEDs kurz rot auf und eine entsprechende Fehlermeldung wird per MQTT abgesetzt.
+
 ## 📄 Lizenz
 
 Dieses Projekt wurde ausschließlich als privat/open-source entwickelt. 
