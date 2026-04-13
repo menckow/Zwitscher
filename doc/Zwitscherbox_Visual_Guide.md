@@ -1,53 +1,53 @@
-# 📖 Ausführliche Anleitung: Die Zwitscherbox
+# 📖 Detailed Guide: The Zwitscherbox
 
 > [!NOTE]
-> Willkommen zur **Zwitscherbox**! Diese interaktive und vernetzte Musikbox spielt beruhigende Klänge, wenn du den Raum betrittst – und leuchtet dank der "Freundschaftslampe" in einer speziellen Farbe, wenn deine Freunde an ihrer Box vorbeilaufen. Hier findest du alles, was du wissen musst.
+> Welcome to the **Zwitscherbox**! This interactive and connected music box plays soothing sounds when you enter the room – and lights up in a special color thanks to the "Friendship Lamp" feature when your friends walk past their box. Here is everything you need to know.
 
 ---
 
-## 🛠️ Teil 1: Vorbereitung und Setup der SD-Karte
+## 🛠️ Part 1: Preparation and SD Card Setup
 
-Bevor du die Zwitscherbox in Betrieb nehmen kannst, muss die beigelegte oder eigene MicroSD-Karte vorbereitet werden. Dies stellt sicher, dass die Box deine Audio-Inhalte findet und sich mit dem Internet (WLAN & MQTT) verbinden kann.
+Before you can start using the Zwitscherbox, the included or your own MicroSD card needs to be prepared. This ensures that the box can find your audio content and connect to the internet (WiFi & MQTT).
 
-![Zwitscherbox Setup Infografik](./zwitscherbox_setup_infografik.png)
+![Zwitscherbox Setup Infographic](./zwitscherbox_setup_infografik_en.png)
 
-### 1. FAT32 Formatierung
-Die SD-Karte **muss** im Format `FAT32` formatiert sein. Nutze dazu das Festplattendienstprogramm an deinem Mac oder ein entsprechendes Tool an einem PC.
+### 1. FAT32 Formatting
+The SD card **must** be formatted in `FAT32`. You can use the Disk Utility on your Mac or a corresponding tool on a PC for this.
 
-### 2. Ordnerstruktur und MP3s
-Du kannst verschiedene "Themen" für deine Sounds anlegen. 
-* Erstelle im Hauptverzeichnis Ordner wie `Wald`, `Meer` oder `Meditation`.
-* Kopiere deine MP3-Dateien in diese Ordner.
-* *Tipp:* Wenn du möchtest, kannst du in jeden Ordner eine Datei names `intro.mp3` legen. Diese wird immer genau dann abgespielt, wenn du manuell in diesen Ordner wechselst (siehe Teil 2).
+### 2. Folder Structure and MP3s
+You can create different "themes" for your sounds. 
+* Create folders in the root directory like `Forest`, `Sea` or `Meditation`.
+* Copy your MP3 files into these folders.
+* *Tip:* If you want, you can place a file named `intro.mp3` in every folder. This track is always played precisely when you manually switch to that folder (see Part 2).
 
-### 3. Konfiguration (`config.txt`)
-Für die Internetfunktionen (WLAN & MQTT für die Freundschaftslampe) benötigt die Box deine Zugangsdaten. Erstelle eine Datei mit dem exakten Namen `config.txt` im Hauptverzeichnis der SD-Karte:
-* **WLAN_SSID**: Dein WLAN-Name (Beispiel: `WLAN_SSID=MeinWLAN`).
-* **WLAN_PASS**: Dein WLAN-Passwort.
-* **FRIENDLAMP_COLOR**: Die Farbe deiner Box in verhexter Schreibweise (z.B. `FF0000` für Rot). In dieser Farbe werden die Boxen deiner Freunde aufleuchten, wenn du an deiner Box vorbeigehst!
+### 3. Configuration (`config.txt`)
+The box needs your login credentials for its internet features (WiFi & MQTT for the Friendship Lamp). Create a file with the exact name `config.txt` in the root directory of the SD card:
+* **WLAN_SSID**: Your WiFi name (Example: `WLAN_SSID=MyWiFi`).
+* **WLAN_PASS**: Your WiFi password.
+* **FRIENDLAMP_COLOR**: The color of your box in HEX format (e.g. `FF0000` for red). Your friends' boxes will light up in this color whenever you walk past your box!
 
 ---
 
-## 🎶 Teil 2: Schnelleinstieg & Bedienung im Alltag
+## 🎶 Part 2: Quick Start & Daily Usage
 
-Sobald die SD-Karte eingelegt ist und du die Box mit Strom versorgst, initialisiert sie sich und ist bereit. Die Bedienung im Alltag ist denkbar einfach!
+Once the SD card is inserted and you supply the box with power, it will initialize and be ready to use. Daily usage is very simple!
 
-![Zwitscherbox Bedienung Infografik](./zwitscherbox_infografik.png)
+![Zwitscherbox Quick Start Infographic](./zwitscherbox_infografik_en.png)
 
-### 1. Stromversorgung
-Stecke die Box einfach in die Steckdose oder schließe sie an eine Powerbank an. Sobald sie hochgefahren ist, überwacht sie den Raum.
+### 1. Power Supply
+Simply plug the box into an outlet or connect it to a power bank. Once it has booted up, it monitors the room.
 
-### 2. Automatische Wiedergabe (Bewegung = Musik)
-Die Besonderheit der Zwitscherbox: Du musst sie nicht aktiv einschalten. Der eingebaute Bewegungsmelder (PIR-Sensor) erkennt, sobald jemand im Raum ist, und startet die Musik. Nach 5 Minuten Inaktivität schaltet sie sich diskret in den Standby-Modus, um Strom zu sparen, und wacht erst bei neuer Bewegung wieder auf.
+### 2. Automatic Playback (Motion = Music)
+The special feature of the Zwitscherbox: You don't have to actively turn it on. The built-in motion sensor (PIR sensor) detects when someone is in the room and starts the music. After 5 minutes of inactivity, it discreetly goes into standby mode to save power, and only wakes up upon detecting new motion.
 
-### 3. Ordnerwahl & Lautstärke
-* **Taster**: Ein kurzer Druck auf den Taster wechselt zum nächsten Sound-Ordner auf der SD-Karte (z.B. vom "Wald" wechseln zum "Meer"). Falls vorhanden, wird dabei die `intro.mp3` zur Bestätigung abgespielt.
-* **Drehregler**: Die Lautstärke kannst du mit dem Regler (Potentiometer) ganz entspannt stufenlos und präzise anpassen.
+### 3. Folder Selection & Volume
+* **Button**: A short press on the button switches to the next sound folder on the SD card (e.g. moving from "Forest" to "Sea"). If available, the `intro.mp3` is played as confirmation.
+* **Volume Knob**: You can easily and seamlessly adjust the volume using the rotary knob (potentiometer).
 
-### 4. Die Freundschaftslampe
-Der LED-Ring an der Box ist mehr als nur Deko: Er verbindet dich mit deinen Liebsten.
-* **Aktion**: Wenn *du* eine Bewegung vor deiner Box auslöst, sendet sie ein unsichtbares Signal an die Boxen deiner Freunde. So wissen diese, dass es dir gut geht.
-* **Reaktion**: Umgekehrt leuchtet *dein* LED-Ring magisch in einer zugeordneten Farbe auf, sobald einer deiner Freunde seine Box auslöst. Das sorgt für ein kleines Lächeln, egal wo man gerade ist.
+### 4. The Friendship Lamp
+The LED ring on the box is more than just decoration: It connects you with your loved ones.
+* **Action**: When *you* trigger motion in front of your box, it sends an invisible signal to your friends' boxes. Thus, they know you're doing well.
+* **Reaction**: Conversely, *your* LED ring magically lights up in an assigned color as soon as one of your friends triggers their box. This is meant to spread small smiles, no matter where you are.
 
 > [!TIP]
-> **Noch Fragen?** Falls ein Fehler auftritt (z.B. falsches WLAN-Passwort), blinkt der LED-Ring typischerweise in einem speziellen Mustersignal, um auf Probleme bei der Initialisierung hinzuweisen.
+> **Any questions?** If an error occurs (e.g. wrong WiFi password), the LED ring typically blinks in a specific pattern to indicate problems during initialization.
