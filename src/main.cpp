@@ -1500,7 +1500,7 @@ void setup() {
     Serial.begin(115200); Serial.println("\nStarting: Directory MP3 Player V_F (MQTT)...");
 
     lastPirActivityTime = millis();
-    randomSeed(analogRead(0));
+    randomSeed(esp_random());
     spi_onboardSD->begin();
 
     Serial.println("Init SD...");
