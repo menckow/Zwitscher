@@ -380,7 +380,7 @@ void mqtt_reconnect() {
 
         static bool firstHaConnectAttempt = true;
         if (connected) {
-            if (firstHaConnectAttempt) { setBootStatusLeds(1, true); firstHaConnectAttempt = false; }
+            if (firstHaConnectAttempt) { setBootStatusLeds(2, true); firstHaConnectAttempt = false; }
             Serial.println("connected");
             publishMqtt(mqtt_topic_ip, WiFi.localIP().toString(), true);
             
@@ -398,7 +398,7 @@ void mqtt_reconnect() {
                  Serial.println("Subscribed to Friendlamp topics on internal broker.");
              }
         } else {
-            if (firstHaConnectAttempt) { setBootStatusLeds(1, false); firstHaConnectAttempt = false; }
+            if (firstHaConnectAttempt) { setBootStatusLeds(2, false); firstHaConnectAttempt = false; }
             Serial.print("failed, rc=");
             Serial.print(mqttClient.state());
             Serial.println(" try again later");
@@ -424,7 +424,7 @@ void mqtt_reconnect() {
 
             static bool firstLampConnectAttempt = true;
             if (connected) {
-                if (firstLampConnectAttempt) { setBootStatusLeds(1, true); firstLampConnectAttempt = false; }
+                if (firstLampConnectAttempt) { setBootStatusLeds(2, true); firstLampConnectAttempt = false; }
                 Serial.println("connected");
                 // Zentraler Status für das Dashboard (Retained)
                 mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online").c_str(), true);
@@ -435,7 +435,7 @@ void mqtt_reconnect() {
                 mqttClientLamp.subscribe("zwitscherbox/update/trigger");
                 mqttClientLamp.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(mqtt_client_id)).c_str(), false);
             } else {
-                if (firstLampConnectAttempt) { setBootStatusLeds(1, false); firstLampConnectAttempt = false; }
+                if (firstLampConnectAttempt) { setBootStatusLeds(2, false); firstLampConnectAttempt = false; }
                 Serial.print("failed, rc=");
                 Serial.print(mqttClientLamp.state());
                 Serial.println(" try again later");

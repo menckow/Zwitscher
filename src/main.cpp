@@ -181,8 +181,12 @@ void setup() {
     Serial.begin(115200); Serial.println("\nStarting: Directory MP3 Player V_F (MQTT)...");
 
     strip.begin(); 
-    strip.setBrightness(50);
+    strip.setBrightness(100); // Heller kurzer Blitz zum Startup
+    strip.fill(strip.Color(255, 255, 255));
+    strip.show();
+    delay(200);
     strip.clear();
+    strip.setBrightness(50); // Zurück auf Normalhelligkeit für Status-LEDs
     strip.show();
 
     lastPirActivityTime = millis();
@@ -191,12 +195,12 @@ void setup() {
 
     Serial.println("Init SD...");
     if (!SD.begin(SD_CS_PIN, *spi_onboardSD)) {
-        setBootStatusLeds(2, false);
+        setBootStatusLeds(1, false);
         Serial.println("SD FAIL!"); 
         delay(3000);
         while (true); 
     }
-    setBootStatusLeds(2, true);
+    setBootStatusLeds(1, true);
     Serial.println("SD OK."); digitalWrite(LED_BUILTIN, HIGH);
 
     // --- Konfiguration laden ---
@@ -239,9 +243,7 @@ void setup() {
 
     // --- LED_Ring Setup ---
     if (friendlamp_enabled) {
-        if (led_count > 0 && led_count != DEFAULT_LED_COUNT) {
-            strip.updateLength(led_count);
-        }
+        // updateLength wird ans Ende des Setups verschoben, da es den LED Buffer sofort löscht!
         strip.setBrightness(led_brightness); // Set brightness from config
         Serial.println("Friendship Lamp (LED Ring) configured. Brightness: " + String(led_brightness));
     }
@@ -290,6 +292,9 @@ void setup() {
     delay(2000); 
 
     // --- LED_Ring finale Einstellung nach Boot Sequence ---
+    if (friendlamp_enabled && led_count > 0 && led_count != DEFAULT_LED_COUNT) {
+        strip.updateLength(led_count);
+    }
     strip.clear(); 
     strip.show();
 
