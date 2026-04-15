@@ -26,8 +26,9 @@ private:
     void clearCurrentEffect();
 
 public:
-    LedController(Adafruit_NeoPixel& stripRef, SemaphoreHandle_t mtx);
+    LedController(Adafruit_NeoPixel& stripRef);
     ~LedController();
+    void begin();
 
     void setEffect(ILedEffect* newEffect);
     void update();

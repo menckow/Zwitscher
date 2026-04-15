@@ -2,11 +2,16 @@
 
 // --- LedController Implementation ---
 
-LedController::LedController(Adafruit_NeoPixel& stripRef, SemaphoreHandle_t mtx) 
-    : strip(stripRef), mutex(mtx), currentEffect(nullptr) {}
+LedController::LedController(Adafruit_NeoPixel& stripRef) 
+    : strip(stripRef), mutex(NULL), currentEffect(nullptr) {}
 
 LedController::~LedController() {
     clearCurrentEffect();
+    // Do not delete the mutex, as it lives for the app lifecycle
+}
+
+void LedController::begin() {
+    mutex = xSemaphoreCreateMutex();
 }
 
 void LedController::clearCurrentEffect() {

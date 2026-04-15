@@ -31,7 +31,7 @@ const char* FW_VERSION = "7.1.0";
 #include "WebManager.h"
 #include "GlobalConfig.h"
 
-SemaphoreHandle_t neoPixelMutex;
+
 
 
 // --- Pin-Definitionen ---
@@ -58,7 +58,7 @@ const int DEFAULT_LED_COUNT = 16;
 // config.led_count wird in der AppConfig verwaltet
 
 Adafruit_NeoPixel strip(DEFAULT_LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-LedController ledCtrl(strip, neoPixelMutex);
+LedController ledCtrl(strip);
 
 // --- Timeout-Konstanten ---
 const unsigned long maxPlaybackDuration = 5 * 60 * 1000UL;
@@ -80,7 +80,7 @@ AudioEngine audioEngine(audio);
 // --- Taster prüfen --- 
 // --- Setup --- 
 void setup() {
-    neoPixelMutex = xSemaphoreCreateMutex();
+    ledCtrl.begin();
     pinMode(LED_BUILTIN, OUTPUT); digitalWrite(LED_BUILTIN, LOW);
     pinMode(POT_PIN, INPUT);
     pinMode(PIR_PIN, INPUT);
