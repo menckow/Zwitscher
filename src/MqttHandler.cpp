@@ -1,11 +1,14 @@
 #include "MqttHandler.h"
 #include "GlobalConfig.h"
 #include "LedController.h"
+#include "AudioEngine.h"
 #include "WebManager.h"
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 #include "Audio.h"
+
+extern AudioEngine audioEngine;
 
 // --- Globals extracted from main ---
 WiFiClient espClient;
@@ -169,9 +172,8 @@ void performOtaUpdate(const char* url, const char* version) {
     Serial.println("OTA Update Prozess gestartet...");
     Serial.printf("Update-URL: %s\n", url);
 
-    if (playing || playingIntro || inPlaybackSession) {
-        audio.stopSong();
-        playing = false; playingIntro = false; inPlaybackSession = false;
+    if (audioEngine.getState() != PlaybackState::IDLE && audioEngine.getState() != PlaybackState::STANDBY && audioEngine.getState() != PlaybackState::INITIALIZING) {
+        audioEngine.stopPlayback();
     }
 
     String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
