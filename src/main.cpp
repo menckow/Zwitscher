@@ -33,17 +33,6 @@ const char* FW_VERSION = "7.1.0";
 
 SemaphoreHandle_t neoPixelMutex;
 
-// --- Webserver Objects ---
-AsyncWebServer server(80);
-DNSServer dns;
-bool apMode = false; // Flag to indicate if we are in AP mode
-bool pendingRestart = false;
-unsigned long restartTime = 0;
-
-
-// ------------------------------------
-
-#define MAX_PATH_DEPTH 1
 
 // --- Pin-Definitionen ---
 const int POT_PIN = 4;
@@ -64,46 +53,13 @@ const unsigned long deepSleepInactivityTimeout = 5 * 60 * 1000UL;
 // --- Globale Objekte und Variablen ---
 SPIClass *spi_onboardSD = new SPIClass(FSPI);
 Audio audio;
-Preferences preferences; // NEU: Objekt für NVS
 
 // Instantiate Application Configuration
 AppConfig config;
 
-// Dynamische MQTT Topics sind Methoden von AppConfig
-
-// MQTT Client Objekte (Interner Broker)
-
-// MQTT Client Objekte (Freundschaftslampe Broker)
-
-
 #include "AudioEngine.h"
 
 AudioEngine audioEngine(audio);
-
-/// --- LED Fade-Effekte ---
-// --- Funktion zum Laden der Konfiguration von SD ---
-
-// --- Webserver & Config Portal ---
-
-
-// --- MQTT Hilfsfunktion zum Publizieren ---
-
-
-// --- Funktion zum Aufbau der WLAN-Verbindung ---
-
-
-// --- MQTT Callbacks ---
-
-
-// -----------------------------------------------
-
-// --- MQTT Wiederverbindungslogik ---
-
-// --- Funktion zum Finden von Verzeichnissen mit MP3s ---
-
-// --- Funktion zum Laden der MP3-Dateien aus dem aktuellen Verzeichnis ---
-
-// --- Audio Callback bei Dateiende --- 
 
 // --- Lautstärke prüfen --- 
 
@@ -189,7 +145,7 @@ void setup() {
         strip.updateLength(config.led_count);
     }
     
-    if (!apMode) {
+    if (!webManager.apMode) {
         strip.clear(); 
         strip.show();
     } else {
@@ -204,14 +160,14 @@ void setup() {
 
 // --- Loop --- 
 void loop() {
-    if (pendingRestart) {
-        if (millis() > restartTime) {
+    if (webManager.pendingRestart) {
+        if (millis() > webManager.restartTime) {
             ESP.restart();
         }
         return; 
     }
-    if (apMode) {
-        dns.processNextRequest();
+    if (webManager.apMode) {
+        webManager.processDns();
         return; 
     }
     

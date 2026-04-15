@@ -33,7 +33,7 @@ void MqttHandler::setupWifi() {
 
     if (config.wifi_ssid == "") {
         Serial.println("WiFi SSID not configured. Starting Config Portal.");
-        startConfigPortal();
+        webManager.startConfigPortal();
         return;
     }
 
@@ -53,7 +53,7 @@ void MqttHandler::setupWifi() {
         ledCtrl.setBootStatusLeds(0, false);
         Serial.println("\nWiFi connection failed! Starting Config Portal.");
         WiFi.disconnect(true);
-        startConfigPortal();
+        webManager.startConfigPortal();
     } else {
         ledCtrl.setBootStatusLeds(0, true);
         Serial.println("\nWiFi connected!");
@@ -74,7 +74,7 @@ void MqttHandler::setupWifi() {
         }
         Serial.println("----------------------------------------");
         
-        setupWebServer();
+        webManager.setupWebServer();
     }
     
     // Config internal broker

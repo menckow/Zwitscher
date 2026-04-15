@@ -4,7 +4,7 @@
 #include <Preferences.h>
 
 extern AppConfig config;
-extern Preferences preferences;
+Preferences preferences;
 
 // Note: these could be loaded from AppConfig instead of hardcoded in AudioEngine.
 const unsigned long potReadInterval = 100;

@@ -5,8 +5,14 @@
 #include <ESPAsyncWebServer.h>
 #include "LedController.h"
 
-extern AsyncWebServer server;
-extern DNSServer dns;
+WebManager webManager(80);
+
+WebManager::WebManager(uint16_t port) : server(port), dns(), apMode(false), pendingRestart(false), restartTime(0) {}
+
+void WebManager::processDns() {
+    dns.processNextRequest();
+}
+
 
 const char* DEFAULT_ROOT_CA = \
 "-----BEGIN CERTIFICATE-----\n"
@@ -41,7 +47,7 @@ const char* DEFAULT_ROOT_CA = \
 "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
 "-----END CERTIFICATE-----\n";
 
-String getHtmlPage() {
+String WebManager::getHtmlPage() {
     String page;
     page.reserve(12000);
     page += "<html><head><title>Zwitscherbox Konfiguration</title>";
@@ -178,7 +184,7 @@ String getHtmlPage() {
     return page;
 }
 
-String getFileManagerHtml() {
+String WebManager::getFileManagerHtml() {
     String page;
     page.reserve(8000);
     page += "<!DOCTYPE html><html><head><title>Dateimanager</title>";
@@ -240,7 +246,7 @@ String getFileManagerHtml() {
     return page;
 }
 
-void handleSave(AsyncWebServerRequest *request) {
+void WebManager::handleSave(AsyncWebServerRequest *request) {
     File configFile = SD.open("/config.txt", FILE_WRITE);
     if (!configFile) {
         request->send(500, "text/plain", "Fehler beim Öffnen der config.txt zum Schreiben.");
@@ -317,7 +323,7 @@ void handleSave(AsyncWebServerRequest *request) {
     restartTime = millis() + 2000; // Dem Server 2 Sekunden Zeit geben, die Seite zu schicken
 }
 
-bool checkAuth(AsyncWebServerRequest *request) {
+bool WebManager::checkAuth(AsyncWebServerRequest *request) {
     if (config.admin_pass.length() > 0 && !request->authenticate("admin", config.admin_pass.c_str())) {
         request->requestAuthentication();
         return false;
@@ -325,23 +331,23 @@ bool checkAuth(AsyncWebServerRequest *request) {
     return true;
 }
 
-void setupWebServer() {
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+void WebManager::setupWebServer() {
+  server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
     request->send(200, "text/html", getHtmlPage());
   });
 
-  server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
+  server.on("/save", HTTP_POST, [this](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
     handleSave(request);
   });
 
-  server.on("/files", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/files", HTTP_GET, [this](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
     request->send(200, "text/html", getFileManagerHtml());
   });
 
-  server.on("/api/list", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/api/list", HTTP_GET, [this](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
     String dirPath = request->hasParam("dir") ? request->getParam("dir")->value() : "/";
     File dir = SD.open(dirPath);
@@ -361,7 +367,7 @@ void setupWebServer() {
     request->send(200, "application/json", json);
   });
 
-  server.on("/api/mkdir", HTTP_POST, [](AsyncWebServerRequest *request){
+  server.on("/api/mkdir", HTTP_POST, [this](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
     if(request->hasParam("path")){
         String path = request->getParam("path")->value();
@@ -370,7 +376,7 @@ void setupWebServer() {
     } else request->send(400);
   });
 
-  server.on("/api/delete", HTTP_DELETE, [](AsyncWebServerRequest *request){
+  server.on("/api/delete", HTTP_DELETE, [this](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
     if(request->hasParam("path")){
         String path = request->getParam("path")->value();
@@ -387,10 +393,10 @@ void setupWebServer() {
     } else request->send(400);
   });
 
-  server.on("/api/upload", HTTP_POST, [](AsyncWebServerRequest *request){
+  server.on("/api/upload", HTTP_POST, [this](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
     request->send(200, "text/plain", "Upload done");
-  }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+  }, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
     if (config.admin_pass.length() > 0 && !request->authenticate("admin", config.admin_pass.c_str())) return;
     File *f = (File *)request->_tempObject;
     if(!index){
@@ -408,7 +414,7 @@ void setupWebServer() {
     }
   });
   
-  server.onNotFound([](AsyncWebServerRequest *request) {
+  server.onNotFound([this](AsyncWebServerRequest *request) {
     if (!checkAuth(request)) return;
     request->send(200, "text/html", getHtmlPage());
   });
@@ -417,7 +423,7 @@ void setupWebServer() {
   Serial.println("HTTP server started.");
 }
 
-void startConfigPortal(){
+void WebManager::startConfigPortal(){
   apMode = true;
   ledCtrl.setApModeLed(true);
   Serial.println("Starting Access Point 'Zwitscherbox'");
