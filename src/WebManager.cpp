@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <SD.h>
 #include <ESPAsyncWebServer.h>
+#include "LedController.h"
 
 extern AsyncWebServer server;
 extern DNSServer dns;
@@ -418,6 +419,7 @@ void setupWebServer() {
 
 void startConfigPortal(){
   apMode = true;
+  setApModeLed(true);
   Serial.println("Starting Access Point 'Zwitscherbox'");
   Serial.println("Password for Access Point is: 12345678");
   WiFi.softAP("Zwitscherbox", "12345678");

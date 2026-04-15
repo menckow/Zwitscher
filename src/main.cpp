@@ -180,12 +180,23 @@ void setup() {
 
     Serial.begin(115200); Serial.println("\nStarting: Directory MP3 Player V_F (MQTT)...");
 
+    strip.begin(); 
+    strip.setBrightness(50);
+    strip.clear();
+    strip.show();
+
     lastPirActivityTime = millis();
     randomSeed(esp_random());
     spi_onboardSD->begin();
 
     Serial.println("Init SD...");
-    if (!SD.begin(SD_CS_PIN, *spi_onboardSD)) { Serial.println("SD FAIL!"); while (true); }
+    if (!SD.begin(SD_CS_PIN, *spi_onboardSD)) {
+        setBootStatusLeds(2, false);
+        Serial.println("SD FAIL!"); 
+        delay(3000);
+        while (true); 
+    }
+    setBootStatusLeds(2, true);
     Serial.println("SD OK."); digitalWrite(LED_BUILTIN, HIGH);
 
     // --- Konfiguration laden ---
@@ -228,11 +239,11 @@ void setup() {
 
     // --- LED_Ring Setup ---
     if (friendlamp_enabled) {
-        strip.updateLength(led_count > 0 ? led_count : DEFAULT_LED_COUNT);
-        strip.begin();
-        strip.show(); // Initialize all pixels to 'off'
+        if (led_count > 0 && led_count != DEFAULT_LED_COUNT) {
+            strip.updateLength(led_count);
+        }
         strip.setBrightness(led_brightness); // Set brightness from config
-        Serial.println("Friendship Lamp (LED Ring) initialized. Brightness: " + String(led_brightness));
+        Serial.println("Friendship Lamp (LED Ring) configured. Brightness: " + String(led_brightness));
     }
 
     Serial.println("Scanning directories...");
@@ -270,8 +281,20 @@ void setup() {
 
     lastButtonState = digitalRead(BUTTON_PIN); buttonState = lastButtonState;
 
+    // --- Boot Status abwarten und LEDs prüfen ---
+    if ((homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
+        mqtt_reconnect(); // Trigger initial MQTT connect to show LED 1 status
+    }
+    
+    // Lass die Boot-Status LEDs für 2 Sekunden leuchten, um sie zu überprüfen
+    delay(2000); 
+
+    // --- LED_Ring finale Einstellung nach Boot Sequence ---
+    strip.clear(); 
+    strip.show();
+
     Serial.println("Setup complete.");
-    publishMqtt(mqtt_topic_status, "Initialized", true); // Bereit-Status
+    if (homeassistant_mqtt_enabled && mqttClient.connected()) publishMqtt(mqtt_topic_status, "Initialized", true); // Bereit-Status
     Serial.println("Waiting for PIR or button...");
 }
 

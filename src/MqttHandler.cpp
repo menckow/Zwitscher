@@ -136,10 +136,12 @@ void setup_wifi() {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
+        setBootStatusLeds(0, false);
         Serial.println("\nWiFi connection failed! Starting Config Portal.");
         WiFi.disconnect(true);
         startConfigPortal();
     } else {
+        setBootStatusLeds(0, true);
         Serial.println("\nWiFi connected!");
         Serial.print("IP address: ");
         Serial.println(WiFi.localIP());
@@ -376,7 +378,9 @@ void mqtt_reconnect() {
              connected = mqttClient.connect(mqtt_client_id.c_str(), statusTopic.c_str(), 1, true, lwtMessage.c_str());
         }
 
+        static bool firstHaConnectAttempt = true;
         if (connected) {
+            if (firstHaConnectAttempt) { setBootStatusLeds(1, true); firstHaConnectAttempt = false; }
             Serial.println("connected");
             publishMqtt(mqtt_topic_ip, WiFi.localIP().toString(), true);
             
@@ -394,6 +398,7 @@ void mqtt_reconnect() {
                  Serial.println("Subscribed to Friendlamp topics on internal broker.");
              }
         } else {
+            if (firstHaConnectAttempt) { setBootStatusLeds(1, false); firstHaConnectAttempt = false; }
             Serial.print("failed, rc=");
             Serial.print(mqttClient.state());
             Serial.println(" try again later");
@@ -417,7 +422,9 @@ void mqtt_reconnect() {
                  connected = mqttClientLamp.connect(lampClientId.c_str(), statusTopic.c_str(), 1, true, lwtMessage.c_str());
             }
 
+            static bool firstLampConnectAttempt = true;
             if (connected) {
+                if (firstLampConnectAttempt) { setBootStatusLeds(1, true); firstLampConnectAttempt = false; }
                 Serial.println("connected");
                 // Zentraler Status für das Dashboard (Retained)
                 mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online").c_str(), true);
@@ -428,6 +435,7 @@ void mqtt_reconnect() {
                 mqttClientLamp.subscribe("zwitscherbox/update/trigger");
                 mqttClientLamp.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(mqtt_client_id)).c_str(), false);
             } else {
+                if (firstLampConnectAttempt) { setBootStatusLeds(1, false); firstLampConnectAttempt = false; }
                 Serial.print("failed, rc=");
                 Serial.print(mqttClientLamp.state());
                 Serial.println(" try again later");

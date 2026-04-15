@@ -184,3 +184,28 @@ void updateFade() {
         fadeState = FADE_NONE;
     }
 }
+
+void setBootStatusLeds(int step, bool success) {
+    if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+        if (step >= 0 && step < strip.numPixels()) {
+            uint32_t color = success ? strip.Color(0, 255, 0) : strip.Color(255, 0, 0);
+            strip.setPixelColor(step, color);
+            strip.show();
+        }
+        xSemaphoreGive(neoPixelMutex);
+    }
+}
+
+void setApModeLed(bool active) {
+    if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
+        if (active) {
+            for (int i = 0; i < strip.numPixels(); i++) {
+                strip.setPixelColor(i, strip.Color(255, 0, 0));
+            }
+        } else {
+            strip.clear();
+        }
+        strip.show();
+        xSemaphoreGive(neoPixelMutex);
+    }
+}

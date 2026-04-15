@@ -11,5 +11,7 @@ extern SemaphoreHandle_t neoPixelMutex;
 void startFadeIn(uint32_t color, int mode = 0, bool isRainbow = false, bool isBlink = false);
 void startFadeOut();
 void updateFade();
+void setBootStatusLeds(int step, bool success);
+void setApModeLed(bool active);
 
 #endif
