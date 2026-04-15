@@ -268,7 +268,7 @@ void AudioEngine::checkPirAndTimeout() {
 
             if (config.friendlamp_enabled) {
                 // Send MQTT string
-                mqttHandler.publish(config.zwitscherbox_topic, "{\"client_id\":\"" + config.mqtt_client_id + "\",\"color\":\"" + config.friendlamp_color + "\",\"effect\":\"fade\",\"duration\":30000}", false);
+                mqttHandler.publishLamp(config.zwitscherbox_topic, "{\"client_id\":\"" + config.mqtt_client_id + "\",\"color\":\"" + config.friendlamp_color + "\",\"effect\":\"fade\",\"duration\":30000}", false);
             }
 
             playRandomTrack();
