@@ -365,6 +365,10 @@ void performOtaUpdate(const char* url, const char* version) {
         }
         case HTTP_UPDATE_NO_UPDATES:
             Serial.println("Keine Updates verfügbar.");
+            if (friendlamp_enabled) {
+                strip.clear();
+                strip.show();
+            }
             break;
         case HTTP_UPDATE_OK: {
             Serial.println("Update erfolgreich! ESP32 startet neu...");
@@ -392,6 +396,13 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, message);
         if (!error) {
+            // Check if this update is targeted to a specific client_id
+            const char* target = doc["target"] | "";
+            if (strlen(target) > 0 && strcmp(target, mqtt_client_id.c_str()) != 0) {
+                Serial.println("OTA: Ignored (targeted to different device: " + String(target) + ")");
+                return;
+            }
+
             const char* url = doc["url"] | "";
             const char* version = doc["version"] | "";
             if (strlen(url) > 0 && strlen(version) > 0) {
