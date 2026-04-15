@@ -21,7 +21,7 @@
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 
-const char* FW_VERSION = "7.0.0";
+const char* FW_VERSION = "7.1.0";
 #include <ESPAsyncWebServer.h> // For Webserver
 #include <AsyncTCP.h>          // For Webserver
 #include <DNSServer.h>         // For Captive Portal
