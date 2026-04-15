@@ -30,18 +30,9 @@ const char* FW_VERSION = "7.1.0";
 #include "LedController.h"
 #include "WebManager.h"
 #include "GlobalConfig.h"
-
-
-
-
+#include "HardwareConfig.h"
 // --- Pin-Definitionen ---
-
-const int POT_PIN = 4;
-const int PIR_PIN = 18;
-const int SD_CS_PIN = SS;
-const int BUTTON_PIN = 17; //38
-const int LED_PIN = 16;
-const int DEFAULT_LED_COUNT = 16;
+// Pins are now centralized in include/HardwareConfig.h
 // config.led_count wird in der AppConfig verwaltet
 
 Adafruit_NeoPixel strip(DEFAULT_LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);

@@ -1,5 +1,6 @@
 #include "AudioEngine.h"
 #include "AppConfig.h"
+#include "HardwareConfig.h"
 #include "MqttHandler.h"
 #include <Preferences.h>
 
@@ -9,9 +10,6 @@ Preferences preferences;
 // Note: these could be loaded from AppConfig instead of hardcoded in AudioEngine.
 const unsigned long potReadInterval = 100;
 const float potSmoothingFactor = 0.2;
-const int POT_PIN = 4;
-const int BUTTON_PIN = 17;
-const int PIR_PIN = 18;
 const unsigned long debounceDelay = 50;
 
 AudioEngine::AudioEngine(Audio& audioRef) : audio(audioRef) {
