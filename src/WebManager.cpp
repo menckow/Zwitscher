@@ -419,7 +419,7 @@ void setupWebServer() {
 
 void startConfigPortal(){
   apMode = true;
-  setApModeLed(true);
+  ledCtrl.setApModeLed(true);
   Serial.println("Starting Access Point 'Zwitscherbox'");
   Serial.println("Password for Access Point is: 12345678");
   WiFi.softAP("Zwitscherbox", "12345678");

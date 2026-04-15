@@ -56,6 +56,7 @@ const int DEFAULT_LED_COUNT = 16;
 // config.led_count wird in der AppConfig verwaltet
 
 Adafruit_NeoPixel strip(DEFAULT_LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+LedController ledCtrl(strip, neoPixelMutex);
 
 // --- Timeout-Konstanten ---
 const unsigned long maxPlaybackDuration = 5 * 60 * 1000UL;
@@ -160,12 +161,12 @@ void setup() {
 
     Serial.println("Init SD...");
     if (!SD.begin(SD_CS_PIN, *spi_onboardSD)) {
-        setBootStatusLeds(1, false);
+        ledCtrl.setBootStatusLeds(1, false);
         Serial.println("SD FAIL!"); 
         delay(3000);
         while (true); 
     }
-    setBootStatusLeds(1, true);
+    ledCtrl.setBootStatusLeds(1, true);
     Serial.println("SD OK."); digitalWrite(LED_BUILTIN, HIGH);
 
     // --- Konfiguration laden ---
@@ -266,7 +267,7 @@ void setup() {
         strip.show();
     } else {
         // Falls updateLength die LEDs gelöscht hat, setzen wir sie für den AP-Modus wieder rot
-        setApModeLed(true);
+        ledCtrl.setApModeLed(true);
     }
 
     Serial.println("Setup complete.");
@@ -288,7 +289,7 @@ void loop() {
         dns.processNextRequest();
         return; // Im AP-Modus nichts anderes tun
     }
-    updateFade();
+    ledCtrl.update();
     // --- MQTT Verbindungs-Handling ---
     if ((config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
         // Versuche zu verbinden/wiederzuverbinden (beide Broker)
@@ -407,7 +408,7 @@ void loop() {
 
             // LEDs ausblenden, wenn in den Standby-Modus gewechselt wird
             if (config.friendlamp_enabled) {
-                startFadeOut();
+                ledCtrl.startFadeOut();
             }
 
             // Setzen des Standby-Flags
@@ -416,9 +417,9 @@ void loop() {
     }
 
     if (config.friendlamp_enabled) {
-        if (ledActive && millis() > ledTimeout) {
-            ledActive = false;
-            startFadeOut();
+        if (ledCtrl.ledActive && millis() > ledCtrl.ledTimeout) {
+            ledCtrl.ledActive = false;
+            ledCtrl.startFadeOut();
         }
     }
 

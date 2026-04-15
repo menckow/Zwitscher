@@ -46,7 +46,7 @@ void handleFreundschaftMessage(String payload) {
                 int r = payload.substring(0, firstComma).toInt();
                 int g = payload.substring(firstComma + 1, secondComma).toInt();
                 int b = payload.substring(secondComma + 1).toInt();
-                parsedColor = strip.Color(r, g, b);
+                parsedColor = Adafruit_NeoPixel::Color(r, g, b);
                 hasLegacyRGB = true;
             } else {
                 // Legacy "Sender:HEX" or raw HEX
@@ -81,9 +81,9 @@ void handleFreundschaftMessage(String payload) {
     
     Serial.printf("--> handleFreundschaftMessage: Activated 3rd LED mode. final value: %u\n", finalColor);
 
-    startFadeIn(finalColor, 1, isRainbow, isBlink);
-    ledTimeout = millis() + duration;
-    ledActive = true; 
+    ledCtrl.startFadeIn(finalColor, 1, isRainbow, isBlink);
+    ledCtrl.ledTimeout = millis() + duration;
+    ledCtrl.ledActive = true; 
 }
 
 void publishMqtt(const String& topic, const String& payload, bool retain) {
@@ -136,12 +136,12 @@ void setup_wifi() {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
-        setBootStatusLeds(0, false);
+        ledCtrl.setBootStatusLeds(0, false);
         Serial.println("\nWiFi connection failed! Starting Config Portal.");
         WiFi.disconnect(true);
         startConfigPortal();
     } else {
-        setBootStatusLeds(0, true);
+        ledCtrl.setBootStatusLeds(0, true);
         Serial.println("\nWiFi connected!");
         Serial.print("IP address: ");
         Serial.println(WiFi.localIP());
@@ -191,10 +191,7 @@ void performOtaUpdate(const char* url, const char* version) {
     otaClient.setInsecure();
 
     if (config.friendlamp_enabled) {
-        for (int i = 0; i < strip.numPixels(); i++) {
-            strip.setPixelColor(i, strip.Color(0, 0, 255));
-        }
-        strip.show();
+        ledCtrl.startFadeIn(0x0000FF, 0, false, false); // Blue
     }
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
@@ -217,21 +214,16 @@ void performOtaUpdate(const char* url, const char* version) {
             if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), errorMsg.c_str(), false);
             if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
             if (config.friendlamp_enabled) {
-                for (int i = 0; i < strip.numPixels(); i++) {
-                    strip.setPixelColor(i, strip.Color(255, 0, 0));
-                }
-                strip.show();
+                ledCtrl.startFadeIn(0xFF0000, 0, false, false); // Red
                 delay(2000);
-                strip.clear();
-                strip.show();
+                ledCtrl.turnOff();
             }
             break;
         }
         case HTTP_UPDATE_NO_UPDATES:
             Serial.println("Keine Updates verfügbar.");
             if (config.friendlamp_enabled) {
-                strip.clear();
-                strip.show();
+                ledCtrl.turnOff();
             }
             break;
         case HTTP_UPDATE_OK: {
@@ -240,8 +232,7 @@ void performOtaUpdate(const char* url, const char* version) {
             if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), okMsg.c_str(), false);
             if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), okMsg.c_str(), false);
             if (config.friendlamp_enabled) {
-                strip.clear();
-                strip.show();
+                ledCtrl.turnOff();
             }
             delay(1000);
             ESP.restart();
@@ -306,12 +297,12 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                 bool isBlink = effect.equalsIgnoreCase("blink");
                 
                 if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
-                currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
-                ledTimeout = millis() + duration;
-                ledActive = true;
+                ledCtrl.currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
+                ledCtrl.ledTimeout = millis() + duration;
+                ledCtrl.ledActive = true;
                 if (config.friendlamp_enabled) {
                     Serial.printf("--> handleLampMessage: Starting effect %s.\n", effect.c_str());
-                    startFadeIn(currentLedColor, 0, isRainbow, isBlink);
+                    ledCtrl.startFadeIn(ledCtrl.currentLedColor, 0, isRainbow, isBlink);
                 }
             } else {
                 Serial.println("--> handleLampMessage: Ignored own message.");
@@ -330,12 +321,12 @@ void handleLampMessage(char* topic, byte* payload, unsigned int length) {
                     bool isRainbow = colorStr.equalsIgnoreCase("RAINBOW");
                     
                     if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
-                    currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
-                    ledTimeout = millis() + 30000; // 30 Sekunden leuchten
-                    ledActive = true;
+                    ledCtrl.currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
+                    ledCtrl.ledTimeout = millis() + 30000; // 30 Sekunden leuchten
+                    ledCtrl.ledActive = true;
                     if (config.friendlamp_enabled) {
                         Serial.println("--> handleLampMessage: Starting Fade-In.");
-                        startFadeIn(currentLedColor, 0, isRainbow, false);
+                        ledCtrl.startFadeIn(ledCtrl.currentLedColor, 0, isRainbow, false);
                     }
                     Serial.printf("Zwitscherbox: Received color %s from %s\n", colorStr.c_str(), senderId.c_str());
                 } else {
@@ -384,7 +375,7 @@ void mqtt_reconnect() {
 
         static bool firstHaConnectAttempt = true;
         if (connected) {
-            if (firstHaConnectAttempt) { setBootStatusLeds(2, true); firstHaConnectAttempt = false; }
+            if (firstHaConnectAttempt) { ledCtrl.setBootStatusLeds(2, true); firstHaConnectAttempt = false; }
             Serial.println("connected");
             publishMqtt(config.getTopicIp(), WiFi.localIP().toString(), true);
             
@@ -402,7 +393,7 @@ void mqtt_reconnect() {
                  Serial.println("Subscribed to Friendlamp topics on internal broker.");
              }
         } else {
-            if (firstHaConnectAttempt) { setBootStatusLeds(2, false); firstHaConnectAttempt = false; }
+            if (firstHaConnectAttempt) { ledCtrl.setBootStatusLeds(2, false); firstHaConnectAttempt = false; }
             Serial.print("failed, rc=");
             Serial.print(mqttClient.state());
             Serial.println(" try again later");
@@ -428,7 +419,7 @@ void mqtt_reconnect() {
 
             static bool firstLampConnectAttempt = true;
             if (connected) {
-                if (firstLampConnectAttempt) { setBootStatusLeds(2, true); firstLampConnectAttempt = false; }
+                if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(2, true); firstLampConnectAttempt = false; }
                 Serial.println("connected");
                 // Zentraler Status für das Dashboard (Retained)
                 mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online").c_str(), true);
@@ -439,7 +430,7 @@ void mqtt_reconnect() {
                 mqttClientLamp.subscribe("zwitscherbox/update/trigger");
                 mqttClientLamp.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id)).c_str(), false);
             } else {
-                if (firstLampConnectAttempt) { setBootStatusLeds(2, false); firstLampConnectAttempt = false; }
+                if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(2, false); firstLampConnectAttempt = false; }
                 Serial.print("failed, rc=");
                 Serial.print(mqttClientLamp.state());
                 Serial.println(" try again later");
