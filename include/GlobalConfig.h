@@ -41,4 +41,13 @@ extern String friendlamp_color;
 extern String friendlamp_topic;
 extern String zwitscherbox_topic;
 
+// Dynamische MQTT Topics
+extern String mqtt_topic_status;
+extern String mqtt_topic_error;
+extern String mqtt_topic_debug;
+extern String mqtt_topic_volume;
+extern String mqtt_topic_directory;
+extern String mqtt_topic_playing;
+extern String mqtt_topic_ip;
+
 #endif
