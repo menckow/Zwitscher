@@ -295,8 +295,14 @@ void setup() {
     if (friendlamp_enabled && led_count > 0 && led_count != DEFAULT_LED_COUNT) {
         strip.updateLength(led_count);
     }
-    strip.clear(); 
-    strip.show();
+    
+    if (!apMode) {
+        strip.clear(); 
+        strip.show();
+    } else {
+        // Falls updateLength die LEDs gelöscht hat, setzen wir sie für den AP-Modus wieder rot
+        setApModeLed(true);
+    }
 
     Serial.println("Setup complete.");
     if (homeassistant_mqtt_enabled && mqttClient.connected()) publishMqtt(mqtt_topic_status, "Initialized", true); // Bereit-Status
