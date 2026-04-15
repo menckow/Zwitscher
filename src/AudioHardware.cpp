@@ -77,20 +77,20 @@ void audio_eof_mp3(const char *info) {
     Serial.println("\n>>> audio_eof_mp3 called <<<");
     Serial.print("eof_mp3 info: "); Serial.println(info);
     playing = false;
-    publishMqtt(mqtt_topic_playing, "STOPPED (EOF)"); // Status senden
+    publishMqtt(config.getTopicPlaying(), "STOPPED (EOF)"); // Status senden
 
     if (playingIntro) {
         playingIntro = false;
         Serial.println(">>> Intro playback finished. Ready for PIR. <<<");
-        publishMqtt(mqtt_topic_status, "Intro Finished"); // Status senden
+        publishMqtt(config.getTopicStatus(), "Intro Finished"); // Status senden
     } else if (inPlaybackSession) {
         inPlaybackSession = false;
         playbackStartTime = 0;
         Serial.println(">>> Random file finished. Ready for PIR. <<<");
-        publishMqtt(mqtt_topic_status, "Random File Finished"); // Status senden
+        publishMqtt(config.getTopicStatus(), "Random File Finished"); // Status senden
     } else {
          Serial.println(">>> EOF occurred unexpectedly. <<<");
-         publishMqtt(mqtt_topic_debug, "Unexpected EOF"); // Debug senden
+         publishMqtt(config.getTopicDebug(), "Unexpected EOF"); // Debug senden
     }
      Serial.printf(">>> audio_eof_mp3 end state: playing=%d, playingIntro=%d, inPlaybackSession=%d <<<\n\n",
                   playing, playingIntro, inPlaybackSession);
@@ -111,7 +111,7 @@ void checkVolumePot() {
             lastVolume = currentVolume;
             Serial.print("Volume set to: "); Serial.print(currentVolume);
             Serial.print(" (Raw: "); Serial.print(rawPotValue); Serial.print(", Smoothed: "); Serial.print(smoothedPotValue, 1); Serial.println(")");
-            publishMqtt(mqtt_topic_volume, String(currentVolume)); // Lautstärke senden
+            publishMqtt(config.getTopicVolume(), String(currentVolume)); // Lautstärke senden
         }
     }
 }
@@ -127,30 +127,30 @@ void checkButton() {
                 if (isStandby) {
                     isStandby = false;
                     Serial.println("Woke up from Standby (Button)");
-                    publishMqtt(mqtt_topic_status, "Woke up from Standby");
+                    publishMqtt(config.getTopicStatus(), "Woke up from Standby");
                 }
                 Serial.println("\n--- Button pressed! Changing directory ---");
-                publishMqtt(mqtt_topic_status, "Button Pressed"); // Status senden
+                publishMqtt(config.getTopicStatus(), "Button Pressed"); // Status senden
                 if (playing || playingIntro || inPlaybackSession) {
                     audio.stopSong(); playing = false; playingIntro = false; inPlaybackSession = false;
                     Serial.println("Stopped current playback.");
-                    publishMqtt(mqtt_topic_playing, "STOPPED (Button)"); // Status senden
+                    publishMqtt(config.getTopicPlaying(), "STOPPED (Button)"); // Status senden
                 }
                 if (!directoryList.empty()) {
                     currentDirectoryIndex = (currentDirectoryIndex + 1) % directoryList.size();
                     String newDirPath = directoryList[currentDirectoryIndex];
                     Serial.println("Selected directory: " + newDirPath);
-                    publishMqtt(mqtt_topic_directory, newDirPath, true); // Verzeichnis senden (retained)
+                    publishMqtt(config.getTopicDirectory(), newDirPath, true); // Verzeichnis senden (retained)
                     loadFilesFromCurrentDirectory();
                     String introPath = newDirPath + "/" + introFileName;
                     if (audio.connecttoFS(SD, introPath.c_str())) {
                         playing = true; playingIntro = true;
                         Serial.println("Playing intro: " + introPath);
-                        publishMqtt(mqtt_topic_playing, introPath); // Intro senden
-                        publishMqtt(mqtt_topic_status, "Playing Intro"); // Status senden
+                        publishMqtt(config.getTopicPlaying(), introPath); // Intro senden
+                        publishMqtt(config.getTopicStatus(), "Playing Intro"); // Status senden
                     } else {
                         Serial.println("intro.mp3 not found/error in " + newDirPath);
-                         publishMqtt(mqtt_topic_error, "intro.mp3 not found/error"); // Fehler senden
+                         publishMqtt(config.getTopicError(), "intro.mp3 not found/error"); // Fehler senden
                         playingIntro = false;
                     }
                     preferences.begin("appState", false);
@@ -158,7 +158,7 @@ void checkButton() {
                     preferences.end();
                 } else {
                     Serial.println("No directories found.");
-                    publishMqtt(mqtt_topic_error, "Button pressed, but no directories"); // Fehler senden
+                    publishMqtt(config.getTopicError(), "Button pressed, but no directories"); // Fehler senden
                  }
                 Serial.println("--- Button action complete ---");
             }

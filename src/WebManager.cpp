@@ -132,44 +132,44 @@ String getHtmlPage() {
     WiFi.scanDelete();
 
     page += "<div class='field'><label for='WIFI_SSID'>Netzwerk Name</label>";
-    page += "<input type='text' id='WIFI_SSID' name='WIFI_SSID' value='" + wifi_ssid + "' list='wifi-networks'></div>";
+    page += "<input type='text' id='WIFI_SSID' name='WIFI_SSID' value='" + config.wifi_ssid + "' list='wifi-networks'></div>";
     page += "<div class='help-text'>Wie heißt dein normales WLAN zu Hause?</div>";
-    addPasswordField("WIFI_PASS", "Passwort", wifi_pass, "Das Passwort für dein WLAN, damit die Box online gehen kann.");
+    addPasswordField("WIFI_PASS", "Passwort", config.wifi_pass, "Das Passwort für dein WLAN, damit die Box online gehen kann.");
     page += "</div>";
 
     page += "<div class='card'><h2>Administrator & Sicherheit</h2>";
-    addPasswordField("ADMIN_PASS", "Webinterface Passwort", admin_pass, "Sichert diese Weboberfläche mit einem Passwort ab (optional, Nutzername ist immer 'admin').");
+    addPasswordField("ADMIN_PASS", "Webinterface Passwort", config.admin_pass, "Sichert diese Weboberfläche mit einem Passwort ab (optional, Nutzername ist immer 'admin').");
     page += "</div>";
 
     page += "<div class='card'><h2>Home Assistant (MQTT)</h2>";
-    addCheckbox("MQTT_INTEGRATION", "MQTT Aktivieren", homeassistant_mqtt_enabled, "Aktiviert die Steuerung und Statusmeldungen für Smart Home Systeme.");
-    addTextField("MQTT_SERVER", "Broker Adresse", mqtt_server);
-    addNumberField("MQTT_PORT", "Port", mqtt_port);
-    addTextField("MQTT_USER", "Benutzername", mqtt_user);
-    addPasswordField("MQTT_PASS", "Passwort", mqtt_pass);
-    addTextField("MQTT_CLIENT_ID", "Client ID", mqtt_client_id, "Einzigartiger Name dieser Box im Netzwerk.");
-    addTextField("MQTT_BASE_TOPIC", "Basis-Pfad (Topic)", mqtt_base_topic, "Der Haupt-Pfad, über den Home Assistant mit der Box spricht.");
+    addCheckbox("MQTT_INTEGRATION", "MQTT Aktivieren", config.homeassistant_mqtt_enabled, "Aktiviert die Steuerung und Statusmeldungen für Smart Home Systeme.");
+    addTextField("MQTT_SERVER", "Broker Adresse", config.mqtt_server);
+    addNumberField("MQTT_PORT", "Port", config.mqtt_port);
+    addTextField("MQTT_USER", "Benutzername", config.mqtt_user);
+    addPasswordField("MQTT_PASS", "Passwort", config.mqtt_pass);
+    addTextField("MQTT_CLIENT_ID", "Client ID", config.mqtt_client_id, "Einzigartiger Name dieser Box im Netzwerk.");
+    addTextField("MQTT_BASE_TOPIC", "Basis-Pfad (Topic)", config.mqtt_base_topic, "Der Haupt-Pfad, über den Home Assistant mit der Box spricht.");
     page += "</div>";
 
     page += "<div class='card'><h2>Freundschaftslampe</h2>";
-    addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", friendlamp_enabled, "Nur anhaken, wenn ein LED-Ring angeschlossen ist!");
-    addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", friendlamp_mqtt_enabled, "Vernetzt deine Box über das Internet mit den Boxen deiner Freunde.");
-    addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", friendlamp_color, "In dieser Farbe leuchten die Lampen deiner Freunde, wenn DU vor deiner Box stehst.");
-    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", friendlamp_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Freundschaftslampe haben.");
-    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", zwitscherbox_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Zwitscherbox haben.");
-    addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
-    addNumberField("LED_FADE_DURATION", "Dauer (ms)", fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
-    addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", led_brightness, "Maximale Helligkeit des LED-Rings.");
-    addNumberField("LED_COUNT", "Anzahl NeoPixel LEDs", led_count, "Anzahl der verlöteten LEDs auf dem verbauten Ring.");
+    addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", config.friendlamp_enabled, "Nur anhaken, wenn ein LED-Ring angeschlossen ist!");
+    addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", config.friendlamp_mqtt_enabled, "Vernetzt deine Box über das Internet mit den Boxen deiner Freunde.");
+    addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", config.friendlamp_color, "In dieser Farbe leuchten die Lampen deiner Freunde, wenn DU vor deiner Box stehst.");
+    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", config.friendlamp_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Freundschaftslampe haben.");
+    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", config.zwitscherbox_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Zwitscherbox haben.");
+    addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", config.led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
+    addNumberField("LED_FADE_DURATION", "Dauer (ms)", config.fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
+    addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", config.led_brightness, "Maximale Helligkeit des LED-Rings.");
+    addNumberField("LED_COUNT", "Anzahl NeoPixel LEDs", config.led_count, "Anzahl der verlöteten LEDs auf dem verbauten Ring.");
     page += "</div>";
 
     page += "<div class='card'><h2>Externer Broker (Optional)</h2>";
-    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", friendlamp_mqtt_server, "Trage hier deinen eigenen Internet-Broker ein (falls genutzt).");
-    addNumberField("FRIENDLAMP_MQTT_PORT", "Port", friendlamp_mqtt_port);
-    addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", friendlamp_mqtt_user);
-    addPasswordField("FRIENDLAMP_MQTT_PASS", "Passwort", friendlamp_mqtt_pass);
-    addCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "TLS Verschlüsselung nutzen", friendlamp_mqtt_tls_enabled, "Sichert die Verbindung ab. In der Regel für öffentliche MQTT Broker empfohlen!");
-    String ca = mqtt_root_ca_content.length() > 0 ? mqtt_root_ca_content : DEFAULT_ROOT_CA;
+    addTextField("FRIENDLAMP_MQTT_SERVER", "Server-URL", config.friendlamp_mqtt_server, "Trage hier deinen eigenen Internet-Broker ein (falls genutzt).");
+    addNumberField("FRIENDLAMP_MQTT_PORT", "Port", config.friendlamp_mqtt_port);
+    addTextField("FRIENDLAMP_MQTT_USER", "Benutzer", config.friendlamp_mqtt_user);
+    addPasswordField("FRIENDLAMP_MQTT_PASS", "Passwort", config.friendlamp_mqtt_pass);
+    addCheckbox("FRIENDLAMP_MQTT_TLS_ENABLED", "TLS Verschlüsselung nutzen", config.friendlamp_mqtt_tls_enabled, "Sichert die Verbindung ab. In der Regel für öffentliche MQTT Broker empfohlen!");
+    String ca = config.mqtt_root_ca_content.length() > 0 ? config.mqtt_root_ca_content : DEFAULT_ROOT_CA;
     addTextArea("FRIENDLAMP_MQTT_ROOT_CA", "Root CA Zertifikat", ca, "Das Stammzertifikat des Servers für die verschlüsselte Verbindung.");
     page += "</div>";
 
@@ -318,7 +318,7 @@ void handleSave(AsyncWebServerRequest *request) {
 }
 
 bool checkAuth(AsyncWebServerRequest *request) {
-    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) {
+    if (config.admin_pass.length() > 0 && !request->authenticate("admin", config.admin_pass.c_str())) {
         request->requestAuthentication();
         return false;
     }
@@ -391,7 +391,7 @@ void setupWebServer() {
     if (!checkAuth(request)) return;
     request->send(200, "text/plain", "Upload done");
   }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
-    if (admin_pass.length() > 0 && !request->authenticate("admin", admin_pass.c_str())) return;
+    if (config.admin_pass.length() > 0 && !request->authenticate("admin", config.admin_pass.c_str())) return;
     File *f = (File *)request->_tempObject;
     if(!index){
         if(!filename.startsWith("/")) filename = "/" + filename;

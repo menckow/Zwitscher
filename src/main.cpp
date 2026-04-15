@@ -26,7 +26,6 @@ const char* FW_VERSION = "7.1.0";
 #include <AsyncTCP.h>          // For Webserver
 #include <DNSServer.h>         // For Captive Portal
 #include "freertos/semphr.h"
-#include "Config.h"
 #include "MqttHandler.h"
 #include "LedController.h"
 #include "WebManager.h"
@@ -54,7 +53,7 @@ const int SD_CS_PIN = SS;
 const int BUTTON_PIN = 17; //38
 const int LED_PIN = 16;
 const int DEFAULT_LED_COUNT = 16;
-int led_count = DEFAULT_LED_COUNT;
+// config.led_count wird in der AppConfig verwaltet
 
 Adafruit_NeoPixel strip(DEFAULT_LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -67,49 +66,10 @@ SPIClass *spi_onboardSD = new SPIClass(FSPI);
 Audio audio;
 Preferences preferences; // NEU: Objekt für NVS
 
-// --- Variablen für Konfiguration und MQTT ---
-String wifi_ssid = "";
-String wifi_pass = "";
-String admin_pass = ""; // Webinterface Password
-String mqtt_server = "";
-int    mqtt_port = 1883; // Standard-Port
-String mqtt_user = "";
-String mqtt_pass = "";
-String mqtt_client_id = "ESP32_AudioPlayer"; // Default, falls Laden fehlschlägt
-String mqtt_base_topic = "audioplayer";      // Default, falls Laden fehlschlägt
-bool   homeassistant_mqtt_enabled = false; // Für die Statusmeldung an Home Assistant
-bool   friendlamp_mqtt_enabled = false;    // Für die Freundschaftslampen-Funktionalität
+// Instantiate Application Configuration
+AppConfig config;
 
-// NEU: TLS Variablen
-bool   friendlamp_mqtt_tls_enabled = false;
-String mqtt_root_ca_content = "";
-
-// Freundschaftslampe MQTT Variablen (Optionaler 2. Broker)
-String friendlamp_mqtt_server = "";
-int    friendlamp_mqtt_port = 1883;
-String friendlamp_mqtt_user = "";
-String friendlamp_mqtt_pass = "";
-
-// Freundschaftslampe Variablen
-bool   friendlamp_enabled = false;
-int    fadeDuration = 1000;
-bool   led_fade_effect = false;
-int    led_brightness = 100; // Helligkeit (0-255), Standardwert
-String friendlamp_color = "0000FF";
-String friendlamp_topic = "freundschaft/farbe";
-String zwitscherbox_topic = "zwitscherbox/farbe";
-unsigned long ledTimeout = 0;
-uint32_t currentLedColor = 0;
-bool ledActive = false;
-
-// Dynamisch erstellte MQTT Topics
-String mqtt_topic_status;
-String mqtt_topic_error;
-String mqtt_topic_debug;    // Optional für detailliertere Infos
-String mqtt_topic_volume;
-String mqtt_topic_directory;
-String mqtt_topic_playing;
-String mqtt_topic_ip;
+// Dynamische MQTT Topics sind Methoden von AppConfig
 
 // MQTT Client Objekte (Interner Broker)
 
@@ -209,31 +169,31 @@ void setup() {
     Serial.println("SD OK."); digitalWrite(LED_BUILTIN, HIGH);
 
     // --- Konfiguration laden ---
-    loadConfig();
+    config.load();
 
     // --- WLAN verbinden (wenn eine der Integrationen aktiviert ist) ---
-    if (homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) {
+    if (config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) {
         setup_wifi();
     }
  
     // --- MQTT Setup für Home Assistant ---
-    if (homeassistant_mqtt_enabled) {
-        if (mqtt_server != "") {
-            mqttClient.setServer(mqtt_server.c_str(), mqtt_port);
+    if (config.homeassistant_mqtt_enabled) {
+        if (config.mqtt_server != "") {
+            mqttClient.setServer(config.mqtt_server.c_str(), config.mqtt_port);
             mqttClient.setCallback(mqttCallback);
             Serial.println("Internal MQTT (Home Assistant) Server configured.");
         } else {
              Serial.println("WARNING: Internal MQTT Server not configured, disabling HA integration.");
-             homeassistant_mqtt_enabled = false;
+             config.homeassistant_mqtt_enabled = false;
         }
     }
 
     // --- MQTT Setup für Freundschaftslampe ---
-    if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server != "") {
+    if (config.friendlamp_mqtt_enabled && config.friendlamp_enabled && config.friendlamp_mqtt_server != "") {
         // Unterscheidung der Verschlüsselung: Nur der Friendlamp-Server nutzt TLS, wenn aktiviert
-        if (friendlamp_mqtt_tls_enabled) {
-            if (mqtt_root_ca_content.length() > 20) {
-                espClientSecureLamp.setCACert(mqtt_root_ca_content.c_str());
+        if (config.friendlamp_mqtt_tls_enabled) {
+            if (config.mqtt_root_ca_content.length() > 20) {
+                espClientSecureLamp.setCACert(config.mqtt_root_ca_content.c_str());
             } else {
                 espClientSecureLamp.setInsecure(); // Fallback, falls kein Zertifikat vorhanden ist
             }
@@ -241,16 +201,16 @@ void setup() {
         } else {
             mqttClientLamp.setClient(espClientLamp); // Standard unverschlüsselt
         }
-        mqttClientLamp.setServer(friendlamp_mqtt_server.c_str(), friendlamp_mqtt_port);
+        mqttClientLamp.setServer(config.friendlamp_mqtt_server.c_str(), config.friendlamp_mqtt_port);
         mqttClientLamp.setCallback(mqttLampCallback);
         Serial.println("Friendship Lamp MQTT Server configured.");
     }
 
     // --- LED_Ring Setup ---
-    if (friendlamp_enabled) {
+    if (config.friendlamp_enabled) {
         // updateLength wird ans Ende des Setups verschoben, da es den LED Buffer sofort löscht!
-        strip.setBrightness(led_brightness); // Set brightness from config
-        Serial.println("Friendship Lamp (LED Ring) configured. Brightness: " + String(led_brightness));
+        strip.setBrightness(config.led_brightness); // Set brightness from config
+        Serial.println("Friendship Lamp (LED Ring) configured. Brightness: " + String(config.led_brightness));
     }
 
     Serial.println("Scanning directories...");
@@ -259,7 +219,7 @@ void setup() {
 
     if (directoryList.empty()) {
         Serial.println("NO MP3 DIRS FOUND!");
-        publishMqtt(mqtt_topic_error, "No MP3 directories found on SD", true); // Fehler auch per MQTT
+        publishMqtt(config.getTopicError(), "No MP3 directories found on SD", true); // Fehler auch per MQTT
         currentDirectoryIndex = -1;
     } else {
         Serial.printf("Found %d directories.\n", directoryList.size());
@@ -270,26 +230,26 @@ void setup() {
         Serial.printf("NVS Loaded: DirIndex=%d, LastVolume=%d\n", currentDirectoryIndex, lastVolume);
         if (currentDirectoryIndex < 0 || currentDirectoryIndex >= directoryList.size()) {
              Serial.printf("Warning: Loaded directory index %d out of bounds. Resetting to 0.\n", currentDirectoryIndex);
-             publishMqtt(mqtt_topic_error, "Loaded directory index out of bounds, reset to 0");
+             publishMqtt(config.getTopicError(), "Loaded directory index out of bounds, reset to 0");
              currentDirectoryIndex = 0;
         }
         loadFilesFromCurrentDirectory();
         // Verzeichnis auch per MQTT publizieren (retained)
         if (currentDirectoryIndex >= 0) {
-            publishMqtt(mqtt_topic_directory, directoryList[currentDirectoryIndex], true);
+            publishMqtt(config.getTopicDirectory(), directoryList[currentDirectoryIndex], true);
         }
     }
 
     audio.setPinout(I2S_BCLK, I2S_LRCLK, I2S_DOUT);
     lastVolume = constrain(lastVolume, 0, 21);
     audio.setVolume(lastVolume);
-    publishMqtt(mqtt_topic_volume, String(lastVolume), true); // Volume auch per MQTT (retained)
+    publishMqtt(config.getTopicVolume(), String(lastVolume), true); // Volume auch per MQTT (retained)
     Serial.printf("Initial Volume set to %d\n", lastVolume);
 
     lastButtonState = digitalRead(BUTTON_PIN); buttonState = lastButtonState;
 
     // --- Boot Status abwarten und LEDs prüfen ---
-    if ((homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
+    if ((config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
         mqtt_reconnect(); // Trigger initial MQTT connect to show LED 1 status
     }
     
@@ -297,8 +257,8 @@ void setup() {
     delay(2000); 
 
     // --- LED_Ring finale Einstellung nach Boot Sequence ---
-    if (friendlamp_enabled && led_count > 0 && led_count != DEFAULT_LED_COUNT) {
-        strip.updateLength(led_count);
+    if (config.friendlamp_enabled && config.led_count > 0 && config.led_count != DEFAULT_LED_COUNT) {
+        strip.updateLength(config.led_count);
     }
     
     if (!apMode) {
@@ -310,7 +270,7 @@ void setup() {
     }
 
     Serial.println("Setup complete.");
-    if (homeassistant_mqtt_enabled && mqttClient.connected()) publishMqtt(mqtt_topic_status, "Initialized", true); // Bereit-Status
+    if (config.homeassistant_mqtt_enabled && mqttClient.connected()) publishMqtt(config.getTopicStatus(), "Initialized", true); // Bereit-Status
     Serial.println("Waiting for PIR or button...");
 }
 
@@ -330,17 +290,17 @@ void loop() {
     }
     updateFade();
     // --- MQTT Verbindungs-Handling ---
-    if ((homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
+    if ((config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
         // Versuche zu verbinden/wiederzuverbinden (beide Broker)
         mqtt_reconnect(); 
         
-        if (homeassistant_mqtt_enabled && mqttClient.connected()) {
+        if (config.homeassistant_mqtt_enabled && mqttClient.connected()) {
             mqttClient.loop(); // Interner MQTT Client am Leben halten
         }
-        if (friendlamp_mqtt_enabled && friendlamp_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
+        if (config.friendlamp_mqtt_enabled && config.friendlamp_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
             mqttClientLamp.loop(); // Lampen MQTT Client am Leben halten
         }
-    } else if ((homeassistant_mqtt_enabled || friendlamp_mqtt_enabled) && WiFi.status() != WL_CONNECTED) {
+    } else if ((config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) && WiFi.status() != WL_CONNECTED) {
         // Optional: WLAN Reconnect versuchen, wenn Verbindung verloren geht
         static unsigned long lastWifiCheck = 0;
         if (millis() - lastWifiCheck > 30000) { // Prüfe alle 30 Sek
@@ -368,22 +328,22 @@ void loop() {
             if (isStandby) {
                 isStandby = false;
                 Serial.println("Woke up from Standby (PIR)");
-                publishMqtt(mqtt_topic_status, "Woke up from Standby");
+                publishMqtt(config.getTopicStatus(), "Woke up from Standby");
             }
             Serial.println("\n+++ PIR TRIGGER +++");
-            publishMqtt(mqtt_topic_status, "PIR Triggered"); // Status senden
+            publishMqtt(config.getTopicStatus(), "PIR Triggered"); // Status senden
 
             // Freundschaftslampe: Sende Signal und leuchte auf
-            if (friendlamp_enabled) {
+            if (config.friendlamp_enabled) {
                 JsonDocument doc;
-                doc["client_id"] = mqtt_client_id;
-                doc["color"] = friendlamp_color;
-                doc["effect"] = friendlamp_color.equalsIgnoreCase("RAINBOW") ? "rainbow" : "fade";
+                doc["client_id"] = config.mqtt_client_id;
+                doc["color"] = config.friendlamp_color;
+                doc["effect"] = config.friendlamp_color.equalsIgnoreCase("RAINBOW") ? "rainbow" : "fade";
                 doc["duration"] = 30000; // 30 sec standard duration
                 String payload;
                 serializeJson(doc, payload);
-                publishMqttLamp(zwitscherbox_topic, payload, false);
-                Serial.println("Zwitscherbox: Sent JSON to topic " + zwitscherbox_topic + ": " + payload);
+                publishMqttLamp(config.zwitscherbox_topic, payload, false);
+                Serial.println("Zwitscherbox: Sent JSON to topic " + config.zwitscherbox_topic + ": " + payload);
             }
 
              if (currentDirectoryIndex >= 0 && !currentMp3Files.empty()) {
@@ -394,20 +354,20 @@ void loop() {
                  String currentDirPath = directoryList[currentDirectoryIndex];
                  String fileToPlay = currentDirPath + "/" + randomFileName;
                  Serial.print("Playing random file: "); Serial.println(fileToPlay);
-                 publishMqtt(mqtt_topic_playing, fileToPlay); // Datei senden
+                 publishMqtt(config.getTopicPlaying(), fileToPlay); // Datei senden
                  if (audio.connecttoFS(SD, fileToPlay.c_str())) {
                       playing = true;
-                      publishMqtt(mqtt_topic_status, "Playing Random"); // Status senden
+                      publishMqtt(config.getTopicStatus(), "Playing Random"); // Status senden
                  } else {
                       Serial.println("ERROR playing file!");
-                      publishMqtt(mqtt_topic_error, "ERROR playing file: " + fileToPlay); // Fehler senden
-                      publishMqtt(mqtt_topic_playing, "STOPPED"); // Status korrigieren
+                      publishMqtt(config.getTopicError(), "ERROR playing file: " + fileToPlay); // Fehler senden
+                      publishMqtt(config.getTopicPlaying(), "STOPPED"); // Status korrigieren
                       playing = false; inPlaybackSession = false;
                  }
                  Serial.println("+++ PIR action complete +++\n");
              } else {
                   Serial.println("PIR detected, but no random files/directory selected.");
-                  publishMqtt(mqtt_topic_debug, "PIR detected, no files/dir"); // Debug senden
+                  publishMqtt(config.getTopicDebug(), "PIR detected, no files/dir"); // Debug senden
              }
          }
     }
@@ -417,11 +377,11 @@ void loop() {
         unsigned long elapsedTime = millis() - playbackStartTime;
         if (elapsedTime >= maxPlaybackDuration) {
             Serial.println("\n!!! PIR playback session timeout (5 min limit) !!!");
-            publishMqtt(mqtt_topic_status, "Timeout Reached"); // Status senden
+            publishMqtt(config.getTopicStatus(), "Timeout Reached"); // Status senden
             if (playing) {
                  audio.stopSong(); playing = false;
                  Serial.println("Audio stopped due to timeout.");
-                 publishMqtt(mqtt_topic_playing, "STOPPED (Timeout)"); // Status senden
+                 publishMqtt(config.getTopicPlaying(), "STOPPED (Timeout)"); // Status senden
             }
             inPlaybackSession = false;
             playbackStartTime = 0;
@@ -440,13 +400,13 @@ void loop() {
             Serial.printf("\n--- Saved state to NVS: DirIndex=%d, Volume=%d ---\n", currentDirectoryIndex, lastVolume);
 
             Serial.println("--- Inactivity detected. Entering Standby Mode. ---");
-            publishMqtt(mqtt_topic_status, "Entering Standby", true); // Letzten Status senden (retained)
+            publishMqtt(config.getTopicStatus(), "Entering Standby", true); // Letzten Status senden (retained)
             Serial.println("WLAN & MQTT remain active. Awaiting PIR or MQTT messages.");
             
             audio.stopSong();
 
             // LEDs ausblenden, wenn in den Standby-Modus gewechselt wird
-            if (friendlamp_enabled) {
+            if (config.friendlamp_enabled) {
                 startFadeOut();
             }
 
@@ -455,7 +415,7 @@ void loop() {
         }
     }
 
-    if (friendlamp_enabled) {
+    if (config.friendlamp_enabled) {
         if (ledActive && millis() > ledTimeout) {
             ledActive = false;
             startFadeOut();

@@ -1,6 +1,10 @@
 #include "LedController.h"
 #include "GlobalConfig.h"
 
+unsigned long ledTimeout = 0;
+uint32_t currentLedColor = 0;
+bool ledActive = false;
+
 enum FadeState { FADE_NONE, FADE_IN, FADE_OUT, FADE_RAINBOW_SPIN, FADE_RAINBOW_OUT, FADE_BLINK };
 FadeState fadeState = FADE_NONE;
 uint32_t fadeColor = 0;
@@ -22,7 +26,7 @@ void startFadeIn(uint32_t color, int mode, bool isRainbow, bool isBlink) {
     }
     fadeRingMode = mode; 
     
-    if (led_fade_effect) {
+    if (config.led_fade_effect) {
         fadeColor = color;
         fadeState = FADE_IN;
         fadeStartTime = millis();
@@ -49,7 +53,7 @@ void startFadeIn(uint32_t color, int mode, bool isRainbow, bool isBlink) {
 }
 
 void startFadeOut() {
-    if (led_fade_effect) {
+    if (config.led_fade_effect) {
         if (fadeState == FADE_RAINBOW_SPIN) {
              fadeState = FADE_RAINBOW_OUT;
         } else if (fadeState == FADE_BLINK) {
@@ -78,7 +82,7 @@ void updateFade() {
             uint8_t b = fadeColor & 0xFF;
             bool isOn = ((currentTime - fadeStartTime) % 1000) < 500;
             if (isOn) {
-                uint32_t c = strip.Color(r * led_brightness / 255, g * led_brightness / 255, b * led_brightness / 255);
+                uint32_t c = strip.Color(r * config.led_brightness / 255, g * config.led_brightness / 255, b * config.led_brightness / 255);
                 strip.fill(c);
             } else {
                 strip.clear();
@@ -93,7 +97,7 @@ void updateFade() {
         if (xSemaphoreTake(neoPixelMutex, (TickType_t)10) == pdTRUE) {
             float brightness = 1.0;
             if (fadeState == FADE_RAINBOW_OUT) {
-                float rainbowProgress = (float)(currentTime - fadeStartTime) / fadeDuration;
+                float rainbowProgress = (float)(currentTime - fadeStartTime) / config.fadeDuration;
                 if (rainbowProgress >= 1.0) {
                      strip.clear();
                      strip.show();
@@ -107,9 +111,9 @@ void updateFade() {
             for(int i=0; i<strip.numPixels(); i++) {
                 int pixelHue = (currentTime * 10) + (i * 65536L / strip.numPixels());
                 uint32_t c = strip.gamma32(strip.ColorHSV(pixelHue));
-                uint8_t r = ((c >> 16) & 0xFF) * brightness * led_brightness / 255;
-                uint8_t g = ((c >> 8) & 0xFF) * brightness * led_brightness / 255;
-                uint8_t b = (c & 0xFF) * brightness * led_brightness / 255;
+                uint8_t r = ((c >> 16) & 0xFF) * brightness * config.led_brightness / 255;
+                uint8_t g = ((c >> 8) & 0xFF) * brightness * config.led_brightness / 255;
+                uint8_t b = (c & 0xFF) * brightness * config.led_brightness / 255;
                 strip.setPixelColor(i, strip.Color(r,g,b));
             }
             strip.show();
@@ -118,7 +122,7 @@ void updateFade() {
         return;
     }
 
-    float progress = (float)(currentTime - fadeStartTime) / fadeDuration;
+    float progress = (float)(currentTime - fadeStartTime) / config.fadeDuration;
     if (progress >= 1.0) {
         progress = 1.0;
     }
