@@ -180,7 +180,12 @@ void setup() {
 
     Serial.begin(115200); Serial.println("\nStarting: Directory MP3 Player V_F (MQTT)...");
 
+    strip.updateLength(64); // Kurzzeitig auf 64 LEDs erweitern, um alle alten Zustände eines Soft-Reboots (OTA/Lokal) zu killen!
     strip.begin(); 
+    strip.clear();
+    strip.show();
+    
+    strip.updateLength(DEFAULT_LED_COUNT); // Für den weißen Startblitz auf Standard zurück
     strip.setBrightness(100); // Heller kurzer Blitz zum Startup
     strip.fill(strip.Color(255, 255, 255));
     strip.show();

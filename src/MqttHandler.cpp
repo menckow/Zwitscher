@@ -239,6 +239,10 @@ void performOtaUpdate(const char* url, const char* version) {
             String okMsg = "V" + String(FW_VERSION) + ":" + String(mqtt_client_id) + " - Success! Rebooting...";
             if (homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), okMsg.c_str(), false);
             if (friendlamp_mqtt_enabled && friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), okMsg.c_str(), false);
+            if (friendlamp_enabled) {
+                strip.clear();
+                strip.show();
+            }
             delay(1000);
             ESP.restart();
             break;
