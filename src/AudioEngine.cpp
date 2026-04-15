@@ -11,7 +11,7 @@ const unsigned long potReadInterval = 100;
 const float potSmoothingFactor = 0.2;
 const int POT_PIN = 4;
 const int BUTTON_PIN = 17;
-const int PIR_PIN = 16;
+const int PIR_PIN = 18;
 const unsigned long debounceDelay = 50;
 
 AudioEngine::AudioEngine(Audio& audioRef) : audio(audioRef) {
