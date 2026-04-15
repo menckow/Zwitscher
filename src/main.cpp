@@ -35,6 +35,20 @@ SemaphoreHandle_t neoPixelMutex;
 
 
 // --- Pin-Definitionen ---
+#ifndef I2S_BCLK
+#define I2S_BCLK 26
+#endif
+#ifndef I2S_LRCLK
+#define I2S_LRCLK 25
+#endif
+#ifndef I2S_DOUT
+#define I2S_DOUT 22
+#endif
+
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2
+#endif
+
 const int POT_PIN = 4;
 const int PIR_PIN = 18;
 const int SD_CS_PIN = SS;
