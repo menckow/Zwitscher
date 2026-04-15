@@ -151,38 +151,9 @@ void setup() {
 
     // --- WLAN verbinden (wenn eine der Integrationen aktiviert ist) ---
     if (config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) {
-        setup_wifi();
+        mqttHandler.setupWifi();
     }
  
-    // --- MQTT Setup für Home Assistant ---
-    if (config.homeassistant_mqtt_enabled) {
-        if (config.mqtt_server != "") {
-            mqttClient.setServer(config.mqtt_server.c_str(), config.mqtt_port);
-            mqttClient.setCallback(mqttCallback);
-            Serial.println("Internal MQTT (Home Assistant) Server configured.");
-        } else {
-             Serial.println("WARNING: Internal MQTT Server not configured, disabling HA integration.");
-             config.homeassistant_mqtt_enabled = false;
-        }
-    }
-
-    // --- MQTT Setup für Freundschaftslampe ---
-    if (config.friendlamp_mqtt_enabled && config.friendlamp_enabled && config.friendlamp_mqtt_server != "") {
-        // Unterscheidung der Verschlüsselung: Nur der Friendlamp-Server nutzt TLS, wenn aktiviert
-        if (config.friendlamp_mqtt_tls_enabled) {
-            if (config.mqtt_root_ca_content.length() > 20) {
-                espClientSecureLamp.setCACert(config.mqtt_root_ca_content.c_str());
-            } else {
-                espClientSecureLamp.setInsecure(); // Fallback, falls kein Zertifikat vorhanden ist
-            }
-            mqttClientLamp.setClient(espClientSecureLamp);
-        } else {
-            mqttClientLamp.setClient(espClientLamp); // Standard unverschlüsselt
-        }
-        mqttClientLamp.setServer(config.friendlamp_mqtt_server.c_str(), config.friendlamp_mqtt_port);
-        mqttClientLamp.setCallback(mqttLampCallback);
-        Serial.println("Friendship Lamp MQTT Server configured.");
-    }
 
     // --- LED_Ring Setup ---
     if (config.friendlamp_enabled) {
@@ -207,7 +178,7 @@ void setup() {
 
     // --- Boot Status abwarten und LEDs prüfen ---
     if ((config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
-        mqtt_reconnect(); // Trigger initial MQTT connect to show LED 1 status
+        mqttHandler.forceReconnect(); // Trigger initial MQTT connect to show LED 1 status
     }
     
     // Lass die Boot-Status LEDs für 2 Sekunden leuchten, um sie zu überprüfen
@@ -227,7 +198,7 @@ void setup() {
     }
 
     Serial.println("Setup complete.");
-    if (config.homeassistant_mqtt_enabled && mqttClient.connected()) publishMqtt(config.getTopicStatus(), "Initialized", true); // Bereit-Status
+    mqttHandler.publish(config.getTopicStatus(), "Initialized", true); // Bereit-Status
     Serial.println("Waiting for PIR or button...");
 }
 
@@ -246,20 +217,7 @@ void loop() {
     
     ledCtrl.update();
     
-    if ((config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) && WiFi.status() == WL_CONNECTED) {
-        mqtt_reconnect(); 
-        if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.loop();
-        if (config.friendlamp_mqtt_enabled && config.friendlamp_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.loop();
-    } else if ((config.homeassistant_mqtt_enabled || config.friendlamp_mqtt_enabled) && WiFi.status() != WL_CONNECTED) {
-        static unsigned long lastWifiCheck = 0;
-        if (millis() - lastWifiCheck > 30000) { 
-            Serial.println("WiFi disconnected. Attempting reconnect...");
-            WiFi.disconnect();
-            WiFi.reconnect();
-            lastWifiCheck = millis();
-        }
-    }
-
+    mqttHandler.update();
     audioEngine.update();
     
     if (config.friendlamp_enabled) {

@@ -128,11 +128,11 @@ void AudioEngine::playIntro() {
     if (audio.connecttoFS(SD, introPath.c_str())) {
         currentState = PlaybackState::PLAYING_INTRO;
         Serial.println("Playing intro: " + introPath);
-        publishMqtt(config.getTopicPlaying(), introPath);
-        publishMqtt(config.getTopicStatus(), "Playing Intro");
+        mqttHandler.publish(config.getTopicPlaying(), introPath);
+        mqttHandler.publish(config.getTopicStatus(), "Playing Intro");
     } else {
         Serial.println("intro.mp3 not found: " + introPath);
-        publishMqtt(config.getTopicError(), "intro.mp3 not found");
+        mqttHandler.publish(config.getTopicError(), "intro.mp3 not found");
         currentState = PlaybackState::IDLE;
     }
 }
@@ -151,11 +151,11 @@ void AudioEngine::playRandomTrack() {
         currentState = PlaybackState::PLAYING_RANDOM;
         playbackStartTime = millis();
         Serial.println("Playing random file: " + randomFilePath);
-        publishMqtt(config.getTopicPlaying(), randomFilePath);
-        publishMqtt(config.getTopicStatus(), "Playing Random File");
+        mqttHandler.publish(config.getTopicPlaying(), randomFilePath);
+        mqttHandler.publish(config.getTopicStatus(), "Playing Random File");
     } else {
         Serial.println("Error playing random file.");
-        publishMqtt(config.getTopicError(), "File play error");
+        mqttHandler.publish(config.getTopicError(), "File play error");
         currentState = PlaybackState::IDLE;
     }
 }
@@ -165,23 +165,23 @@ void AudioEngine::stopPlayback() {
         audio.stopSong();
         currentState = PlaybackState::IDLE;
         Serial.println("Stopped current playback.");
-        publishMqtt(config.getTopicPlaying(), "STOPPED (Manual)");
+        mqttHandler.publish(config.getTopicPlaying(), "STOPPED (Manual)");
     }
 }
 
 void AudioEngine::onAudioEof() {
     Serial.println("\n>>> audio_eof_mp3 called <<<");
-    publishMqtt(config.getTopicPlaying(), "STOPPED (EOF)");
+    mqttHandler.publish(config.getTopicPlaying(), "STOPPED (EOF)");
     
     if (currentState == PlaybackState::PLAYING_INTRO) {
         currentState = PlaybackState::IDLE;
         Serial.println(">>> Intro playback finished. Ready for PIR. <<<");
-        publishMqtt(config.getTopicStatus(), "Intro Finished");
+        mqttHandler.publish(config.getTopicStatus(), "Intro Finished");
     } else if (currentState == PlaybackState::PLAYING_RANDOM) {
         currentState = PlaybackState::IDLE;
         playbackStartTime = 0;
         Serial.println(">>> Random file finished. Ready for PIR. <<<");
-        publishMqtt(config.getTopicStatus(), "Random File Finished");
+        mqttHandler.publish(config.getTopicStatus(), "Random File Finished");
     } else {
         currentState = PlaybackState::IDLE;
         Serial.println(">>> EOF occurred unexpectedly in non-playing state. <<<");
@@ -201,7 +201,7 @@ void AudioEngine::checkVolumePot() {
             audio.setVolume(currentVolume);
             lastVolume = currentVolume;
             Serial.printf("Volume set to: %d (Raw: %d)\n", currentVolume, rawPotValue);
-            publishMqtt(config.getTopicVolume(), String(currentVolume));
+            mqttHandler.publish(config.getTopicVolume(), String(currentVolume));
         }
     }
 }
@@ -217,18 +217,18 @@ void AudioEngine::checkButton() {
                 if (currentState == PlaybackState::STANDBY) {
                     currentState = PlaybackState::IDLE;
                     Serial.println("Woke up from Standby (Button)");
-                    publishMqtt(config.getTopicStatus(), "Woke up from Standby");
+                    mqttHandler.publish(config.getTopicStatus(), "Woke up from Standby");
                 }
                 
                 Serial.println("\n--- Button pressed! Changing directory ---");
-                publishMqtt(config.getTopicStatus(), "Button Pressed");
+                mqttHandler.publish(config.getTopicStatus(), "Button Pressed");
                 
                 stopPlayback();
                 
                 if (!directoryList.empty()) {
                     currentDirectoryIndex = (currentDirectoryIndex + 1) % directoryList.size();
                     String newDirPath = directoryList[currentDirectoryIndex];
-                    publishMqtt(config.getTopicDirectory(), newDirPath, true);
+                    mqttHandler.publish(config.getTopicDirectory(), newDirPath, true);
                     loadFilesFromCurrentDirectory();
                     
                     playIntro();
@@ -261,14 +261,14 @@ void AudioEngine::checkPirAndTimeout() {
             if (currentState == PlaybackState::STANDBY) {
                 currentState = PlaybackState::IDLE;
                 Serial.println("Woke up from Standby (PIR)");
-                publishMqtt(config.getTopicStatus(), "Woke up from Standby");
+                mqttHandler.publish(config.getTopicStatus(), "Woke up from Standby");
             }
             Serial.println("\n+++ PIR TRIGGER +++");
-            publishMqtt(config.getTopicStatus(), "PIR Triggered");
+            mqttHandler.publish(config.getTopicStatus(), "PIR Triggered");
 
             if (config.friendlamp_enabled) {
                 // Send MQTT string
-                publishMqtt(config.zwitscherbox_topic, "{\"client_id\":\"" + config.mqtt_client_id + "\",\"color\":\"" + config.friendlamp_color + "\",\"effect\":\"fade\",\"duration\":30000}", false);
+                mqttHandler.publish(config.zwitscherbox_topic, "{\"client_id\":\"" + config.mqtt_client_id + "\",\"color\":\"" + config.friendlamp_color + "\",\"effect\":\"fade\",\"duration\":30000}", false);
             }
 
             playRandomTrack();
@@ -293,7 +293,7 @@ void AudioEngine::checkPirAndTimeout() {
             preferences.end();
             
             Serial.println("--- Entering Standby Mode ---");
-            publishMqtt(config.getTopicStatus(), "Entering Standby", true);
+            mqttHandler.publish(config.getTopicStatus(), "Entering Standby", true);
             
             if (config.friendlamp_enabled) {
                 ledCtrl.startFadeOut();
