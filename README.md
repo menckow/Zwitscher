@@ -137,7 +137,7 @@ This project uses **PlatformIO**.
 
 ## 📡 MQTT Topics
 
-When the MQTT connection is active, the setup publishes to the following topics (based on `MQTT_BASE_TOPIC`, e.g. `audioplayer`):
+When the MQTT connection is active, the setup publishes to the following topics (based on `MQTT_BASE_TOPIC`, e.g. `audioplayer`) only to the internal broker:
 
 * `audioplayer/status`: Status messages (‘Online’, ‘Playing Intro’, ‘Entering Standby’, ‘Woke up from Standby’, etc.)
 * `audioplayer/volume`: Current volume.
@@ -162,7 +162,7 @@ A standard JSON packet from the sender (or your smart home system) looks like th
 }
 ```
 
-- **`client_id` (string):** The unique name of the device playing the content (used to ensure the box does not respond to its own messages and to prevent infinite loops).
+- **`client_id` (string):** The unique name (defined in MQTT_CLIENT_ID) of the device playing the content (used to ensure the box does not respond to its own messages and to prevent infinite loops).
 
 - **`color` (string):** The HEX colour code (e.g. `00FF00` or `#00FF00` for green). If the word `RAINBOW` is passed as the colour, the hidden, circular light effect starts.
 - **`effect` (string):** Controls the animation behaviour of the NeoPixel LEDs. Supported values are `‘fade’` (soft fade), `“blink”` (flashing once per second in time with the beat) and `‘rainbow’`.
