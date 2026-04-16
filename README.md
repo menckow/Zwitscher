@@ -29,7 +29,7 @@ A smart, directory-based MP3 player based on the **ESP32-S3 (YB-ESP32-S3-AMP)** 
   - Configurable via the Web UI, you can select your **Timezone** (e.g. Europe/Berlin) and define a sleep window (e.g. `22:00` to `08:00`). 
   - Using an internal background **NTP time sync**, the device will strictly ignore any incoming external colour MQTT signals during this window, ensuring it doesn't accidentally wake you up at night with bright LEDs. Local motion detection (PIR audio) continues to function.
 - **Friendly lamp (RGB LED ring):**
-  - **CORRECTION:** If *another* box detects movement and sends an MQTT signal, your own LED ring lights up in the colour of the sender. Triggering *your own* PIR sensor **does not** cause your own lamp to light up, but only sends a signal to the others.
+  - **Presence:** If *another* box detects movement and sends an MQTT signal, your own LED ring lights up in the colour of the sender. Triggering *your own* PIR sensor **does not** cause your own lamp to light up, but only sends a signal to the others.
   - **Two Topics:** The box distinguishes between messages on the `ZWITSCHERBOX_TOPIC` (the ring lights up completely in the colour sent) and the `FRIENDLAMP_TOPIC` (every third LED on the ring lights up in the complementary colour).
   - The LEDs fade in and out with a gentle **fade effect**. The duration and brightness can be adjusted in `config.txt`.
   - **Boot Check Sequence:** When powering on, the LEDs intuitively visualise the health of the boot process by lighting up individual LEDs sequentially in green (or red for failure) to signal initialisation stages (1. Hardware, 2. Wi-Fi, 3. Internal MQTT, 4. External MQTT).
