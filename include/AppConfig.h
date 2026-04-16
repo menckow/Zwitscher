@@ -36,6 +36,12 @@ public:
     String friendlamp_color = "0000FF";
     String friendlamp_topic = "friendlamp/group";
     String zwitscherbox_topic = "zwitscherbox/group";
+    
+    // Time & Quiet Mode (Do Not Disturb)
+    String timezone = "CET-1CEST,M3.5.0,M10.5.0/3"; // Default Germany
+    bool quiet_time_enabled = false;
+    String quiet_time_start = "22:00";
+    String quiet_time_end = "08:00";
 
     // Dynamic MQTT Topics
     String getTopicStatus() const { return mqtt_base_topic + "/status/" + mqtt_client_id; }

@@ -4,6 +4,7 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 
 class MqttHandler {
 private:
@@ -24,6 +25,7 @@ private:
 
     void verifyMqttConnection();
     void internalMqttReconnect();
+    bool isQuietTime();
 
 public:
     MqttHandler();

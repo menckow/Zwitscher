@@ -60,6 +60,9 @@ void MqttHandler::setupWifi() {
         Serial.print("IP address: ");
         Serial.println(WiFi.localIP());
         
+        Serial.println("Starting NTP time sync...");
+        configTzTime(config.timezone.c_str(), "pool.ntp.org", "time.nist.gov");
+        
         publish(config.getTopicIp(), WiFi.localIP().toString(), true);
 
         Serial.println("----------------------------------------");
@@ -231,6 +234,11 @@ void MqttHandler::publishLamp(const String& topic, const String& payload, bool r
 }
 
 void MqttHandler::handleFreundschaftMessage(String payload) {
+    if (isQuietTime()) {
+        Serial.println("--> handleFreundschaftMessage: Ignored message due to active Quiet Time (Do Not Disturb).");
+        return;
+    }
+
     Serial.println("--> handleFreundschaftMessage: Received " + payload);
 
     String colorStr = "";
@@ -464,4 +472,28 @@ void MqttHandler::staticMqttCallback(char* topic, byte* payload, unsigned int le
 
 void MqttHandler::staticMqttLampCallback(char* topic, byte* payload, unsigned int length) {
     mqttHandler.handleLampCallback(topic, payload, length);
+}
+
+bool MqttHandler::isQuietTime() {
+    if (!config.quiet_time_enabled) return false;
+    
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo, 50)) {
+        return false; // Time not set yet, don't drop messages
+    }
+    
+    int startH = config.quiet_time_start.substring(0, 2).toInt();
+    int startM = config.quiet_time_start.substring(3, 5).toInt();
+    int endH = config.quiet_time_end.substring(0, 2).toInt();
+    int endM = config.quiet_time_end.substring(3, 5).toInt();
+    
+    int currentMins = timeinfo.tm_hour * 60 + timeinfo.tm_min;
+    int startMins = startH * 60 + startM;
+    int endMins = endH * 60 + endM;
+    
+    if (startMins <= endMins) {
+        return (currentMins >= startMins && currentMins < endMins);
+    } else {
+        return (currentMins >= startMins || currentMins < endMins); // wraps around midnight
+    }
 }

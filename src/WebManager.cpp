@@ -126,6 +126,23 @@ String WebManager::getHtmlPage() {
         if (desc.length() > 0) page += "<div class='help-text' style='margin-top:5px;'>" + desc + "</div>";
         page += "</div>";
     };
+    
+    auto addTimeField = [&](const String& id, const String& label, const String& value, const String& desc = "") {
+        page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
+        page += "<input type='time' id='" + id + "' name='" + id + "' value='" + value + "'></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
+    };
+    
+    auto addSelectField = [&](const String& id, const String& label, const String& value, const std::vector<std::pair<String, String>>& options, const String& desc = "") {
+        page += "<div class='field'><label for='" + id + "'>" + label + "</label>";
+        page += "<select id='" + id + "' name='" + id + "'>";
+        for (const auto& opt : options) {
+            String selected = (opt.first == value) ? "selected" : "";
+            page += "<option value='" + opt.first + "' " + selected + ">" + opt.second + "</option>";
+        }
+        page += "</select></div>";
+        if (desc.length() > 0) page += "<div class='help-text'>" + desc + "</div>";
+    };
 
     // Sektionen
     page += "<div class='card'><h2>WLAN Einstellungen</h2>";
@@ -167,6 +184,20 @@ String WebManager::getHtmlPage() {
     addNumberField("LED_FADE_DURATION", "Dauer (ms)", config.fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
     addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", config.led_brightness, "Maximale Helligkeit des LED-Rings.");
     addNumberField("LED_COUNT", "Anzahl NeoPixel LEDs", config.led_count, "Anzahl der verlöteten LEDs auf dem verbauten Ring.");
+    page += "</div>";
+
+    page += "<div class='card'><h2>Ruhezeit (Bitte nicht st&ouml;ren)</h2>";
+    std::vector<std::pair<String, String>> tzOptions = {
+        {"CET-1CEST,M3.5.0,M10.5.0/3", "Europa/Berlin (CET/CEST)"},
+        {"GMT0BST,M3.5.0/1,M10.5.0", "Europa/London (GMT/BST)"},
+        {"EST5EDT,M3.2.0,M11.1.0", "USA/New York (EST/EDT)"},
+        {"PST8PDT,M3.2.0,M11.1.0", "USA/Los Angeles (PST/PDT)"},
+        {"AEST-10AEDT,M10.1.0,M4.1.0/3", "Australien/Sydney (AEST/AEDT)"}
+    };
+    addSelectField("TIMEZONE", "Zeitzone", config.timezone, tzOptions, "Notwendig f&uuml;r korrekte Sommer-/Winterzeit.");
+    addCheckbox("QUIET_TIME_ENABLED", "Ruhezeit aktivieren", config.quiet_time_enabled, "In dieser Zeit werden keine eingehenden Farben von au&szlig;en angezeigt. (NTP Server notwendig)");
+    addTimeField("QUIET_TIME_START", "Start", config.quiet_time_start, "Ab dieser Uhrzeit bleibt die Lampe stumm (z.B. 22:00).");
+    addTimeField("QUIET_TIME_END", "Ende", config.quiet_time_end, "Ab dieser Uhrzeit werden wieder Farben angezeigt (z.B. 08:00).");
     page += "</div>";
 
     page += "<div class='card'><h2>Externer Broker (Optional)</h2>";
@@ -299,6 +330,12 @@ void WebManager::handleSave(AsyncWebServerRequest *request) {
     writeParam("LED_FADE_DURATION", "LED_FADE_DURATION");
     writeParam("LED_BRIGHTNESS", "LED_BRIGHTNESS");
     writeParam("LED_COUNT", "LED_COUNT");
+
+    // Ruhezeit
+    writeParam("TIMEZONE", "TIMEZONE");
+    writeCheckbox("QUIET_TIME_ENABLED", "QUIET_TIME_ENABLED");
+    writeParam("QUIET_TIME_START", "QUIET_TIME_START");
+    writeParam("QUIET_TIME_END", "QUIET_TIME_END");
 
     // Externer Broker
     writeParam("FRIENDLAMP_MQTT_SERVER", "FRIENDLAMP_MQTT_SERVER");
