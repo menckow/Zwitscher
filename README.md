@@ -57,11 +57,11 @@ The SD card should be formatted as follows:
 ```
 /
 ├── config.txt                   # (Optional) Wi-Fi and MQTT configuration
-├── BirdSounds/                # Directory 1
+├── BirdSounds/                  # Directory 1
 │   ├── intro.mp3                # Intro for Directory 1 (‘You are now listening to birds’)
 │   ├── blackbird.mp3
 │   └── thrush.mp3
-└── Waterfall/                  # Directory 2
+└── Waterfall/                   # Directory 2
     ├── intro.mp3
     ├── waterfall1.mp3
     └── waterfall2.mp3
