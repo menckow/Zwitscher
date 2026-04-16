@@ -95,15 +95,16 @@ MQTT_USER=mqtt_user
 MQTT_PASS=mqtt_password
 MQTT_CLIENT_ID=ESP32_AudioPlayer
 MQTT_BASE_TOPIC=audioplayer
+
 # --- 5. Friendship Lamp (RGB LED ring) ---
 # Turns the LED ring hardware on (1) or off (0).
 FRIENDLAMP_ENABLE=1
 # Fixed transmission colour for THIS box in hexadecimal format (visually selectable in the web portal)
 FRIENDLAMP_COLOR=0000FF
 # Topic for friendship colour signals
-FRIENDLAMP_TOPIC=friendship/colour
+FRIENDLAMP_TOPIC=freundschaftslampe/farbe
 # Topic for Zwitscherbox colour signals
-ZWITSCHERBOX_TOPIC=zwitscherbox/colour
+ZWITSCHERBOX_TOPIC=zwitscherbox/farbe
 
 # Control for LED effects
 LED_FADE_EFFECT=1
