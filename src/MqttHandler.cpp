@@ -115,7 +115,7 @@ void MqttHandler::internalMqttReconnect() {
     String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
     String lwtMessage = "offline";
 
-    if (config.homeassistant_mqtt_enabled && !mqttClient.connected() && millis() - lastMqttReconnectAttempt > mqttReconnectInterval) {
+    if (config.homeassistant_mqtt_enabled && !mqttClient.connected() && (lastMqttReconnectAttempt == 0 || millis() - lastMqttReconnectAttempt > mqttReconnectInterval)) {
         lastMqttReconnectAttempt = millis();
         mqttClient.setClient(espClient);
 
@@ -153,7 +153,7 @@ void MqttHandler::internalMqttReconnect() {
     }
 
     if (config.friendlamp_mqtt_enabled && config.friendlamp_enabled && config.friendlamp_mqtt_server != "" && !mqttClientLamp.connected()) {
-        if (millis() - lastLampMqttReconnectAttempt > mqttReconnectInterval) {
+        if (lastLampMqttReconnectAttempt == 0 || millis() - lastLampMqttReconnectAttempt > mqttReconnectInterval) {
             lastLampMqttReconnectAttempt = millis();
             Serial.print("Attempting Lamp MQTT connection...");
             bool connected = false;
@@ -169,7 +169,7 @@ void MqttHandler::internalMqttReconnect() {
 
             static bool firstLampConnectAttempt = true;
             if (connected) {
-                if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(2, true); firstLampConnectAttempt = false; }
+                if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(3, true); firstLampConnectAttempt = false; }
                 Serial.println("connected");
                 mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online").c_str(), true);
                 
@@ -179,7 +179,7 @@ void MqttHandler::internalMqttReconnect() {
                 mqttClientLamp.subscribe("zwitscherbox/update/trigger");
                 mqttClientLamp.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id)).c_str(), false);
             } else {
-                if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(2, false); firstLampConnectAttempt = false; }
+                if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(3, false); firstLampConnectAttempt = false; }
                 Serial.print("failed, rc=");
                 Serial.print(mqttClientLamp.state());
                 Serial.println(" try again later");
