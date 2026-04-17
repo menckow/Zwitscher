@@ -80,6 +80,34 @@ void LedController::setApModeLed(bool active) {
     }
 }
 
+void LedController::setSolidColor(uint32_t color) {
+    if (xSemaphoreTake(mutex, (TickType_t)10) == pdTRUE) {
+        clearCurrentEffect();
+        for (uint16_t i = 0; i < strip.numPixels(); i++) {
+            strip.setPixelColor(i, color);
+        }
+        strip.show();
+        xSemaphoreGive(mutex);
+    }
+}
+
+void LedController::setOtaProgress(int percent) {
+    if (xSemaphoreTake(mutex, (TickType_t)10) == pdTRUE) {
+        clearCurrentEffect();
+        uint16_t numLedsToLight = (percent * strip.numPixels()) / 100;
+        
+        for (uint16_t i = 0; i < strip.numPixels(); i++) {
+            if (i < numLedsToLight) {
+                strip.setPixelColor(i, strip.Color(0, 0, 255)); // Blue ring
+            } else {
+                strip.setPixelColor(i, strip.Color(0, 0, 0)); // Off
+            }
+        }
+        strip.show();
+        xSemaphoreGive(mutex);
+    }
+}
+
 bool LedController::isLedActive() const { return ledActive; }
 void LedController::setLedActive(bool active) { ledActive = active; }
 void LedController::setTimeout(unsigned long timeout) { ledTimeout = timeout; }

@@ -37,6 +37,8 @@ public:
     // Specific Status LEDs (immediate effect, overwrites current)
     void setBootStatusLeds(int step, bool success);
     void setApModeLed(bool active);
+    void setSolidColor(uint32_t color);
+    void setOtaProgress(int percent);
     
     // Legacy Hook wrapper
     void startFadeIn(uint32_t color, int mode = 0, bool isRainbow = false, bool isBlink = false);

@@ -329,7 +329,7 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
     bool isHttps = String(url).startsWith("https://");
 
     if (config.friendlamp_enabled) {
-        ledCtrl.startFadeIn(0x0000FF, 0, false, false); // Blue
+        ledCtrl.setSolidColor(0x0000FF); // Blue solid
     }
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
@@ -341,7 +341,7 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
         if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
         
         if (config.friendlamp_enabled) {
-            ledCtrl.startFadeIn(0xFF0000, 0, false, false); // Red
+            ledCtrl.setSolidColor(0xFF0000); // Red
             delay(2000);
             ledCtrl.turnOff();
         }
@@ -363,6 +363,10 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
         if (percent % 10 == 0 && percent != lastPercent) {
             lastPercent = percent;
             Serial.printf("OTA Download: %d%%\n", percent);
+            
+            if (config.friendlamp_enabled) {
+                ledCtrl.setOtaProgress(percent);
+            }
             
             // Publish progress
             String progMsg = "V" + String(FW_VERSION) + ":Updating (" + String(percent) + "%)";
@@ -392,7 +396,7 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
             if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), errorMsg.c_str(), false);
             if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
             if (config.friendlamp_enabled) {
-                ledCtrl.startFadeIn(0xFF0000, 0, false, false); // Red
+                ledCtrl.setSolidColor(0xFF0000); // Red
                 delay(2000);
                 ledCtrl.turnOff();
             }
