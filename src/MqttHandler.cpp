@@ -334,12 +334,28 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
     
-    if (md5 != nullptr && strlen(md5) > 0) {
-        Serial.printf("Sicherheits-Check: MD5 Hash Validierung aktiviert (%s)\n", md5);
-        httpUpdate.setMD5sum(md5);
-    } else {
-        Serial.println("Warnung: Kein MD5 Hash übergeben. Führe Update ohne Hash-Prüfung aus.");
+    if (md5 == nullptr || strlen(md5) != 32) {
+        String errorMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Update failed: Invalid or missing MD5 hash (must be 32 characters)";
+        Serial.println(errorMsg);
+        if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), errorMsg.c_str(), false);
+        if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
+        
+        if (config.friendlamp_enabled) {
+            ledCtrl.startFadeIn(0xFF0000, 0, false, false); // Red
+            delay(2000);
+            ledCtrl.turnOff();
+        }
+        
+        // Revert status so dashboard recovers
+        delay(3000);
+        String resetMsg = "V" + String(FW_VERSION) + ":online";
+        if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), resetMsg.c_str(), true);
+        if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), resetMsg.c_str(), true);
+        return;
     }
+
+    Serial.printf("Sicherheits-Check: MD5 Hash Validierung aktiviert (%s)\n", md5);
+    httpUpdate.setMD5sum(md5);
 
     httpUpdate.onProgress([](int cur, int total) {
         static int lastPercent = -1;
