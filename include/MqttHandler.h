@@ -38,7 +38,7 @@ public:
     void publish(const String& topic, const String& payload, bool retain = false);
     void publishLamp(const String& topic, const String& payload, bool retain = false);
     
-    void performOtaUpdate(const char* url, const char* version);
+    void performOtaUpdate(const char* url, const char* version, const char* md5 = nullptr);
 
     // Static callbacks required by PubSubClient
     static void staticMqttCallback(char* topic, byte* payload, unsigned int length);

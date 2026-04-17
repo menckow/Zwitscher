@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
+
 #include "Audio.h"
 
 extern AudioEngine audioEngine;
@@ -305,7 +306,7 @@ void MqttHandler::handleFreundschaftMessage(String payload) {
     ledCtrl.ledActive = true; 
 }
 
-void MqttHandler::performOtaUpdate(const char* url, const char* version) {
+void MqttHandler::performOtaUpdate(const char* url, const char* version, const char* md5) {
     Serial.println("OTA Update Prozess gestartet...");
     Serial.printf("Update-URL: %s\n", url);
 
@@ -325,14 +326,20 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version) {
         mqttClientLamp.publish("zwitscherbox/update/status", startMsg.c_str());
     }
 
-    WiFiClientSecure otaClient;
-    otaClient.setInsecure();
+    bool isHttps = String(url).startsWith("https://");
 
     if (config.friendlamp_enabled) {
         ledCtrl.startFadeIn(0x0000FF, 0, false, false); // Blue
     }
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    
+    if (md5 != nullptr && strlen(md5) > 0) {
+        Serial.printf("Sicherheits-Check: MD5 Hash Validierung aktiviert (%s)\n", md5);
+        httpUpdate.setMD5sum(md5);
+    } else {
+        Serial.println("Warnung: Kein MD5 Hash übergeben. Führe Update ohne Hash-Prüfung aus.");
+    }
 
     httpUpdate.onProgress([](int cur, int total) {
         static int lastPercent = -1;
@@ -343,7 +350,15 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version) {
         }
     });
 
-    t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
+    t_httpUpdate_return ret;
+    if (isHttps) {
+        WiFiClientSecure secureClient;
+        secureClient.setInsecure();
+        ret = httpUpdate.update(secureClient, url);
+    } else {
+        WiFiClient insecureClient;
+        ret = httpUpdate.update(insecureClient, url);
+    }
 
     switch (ret) {
         case HTTP_UPDATE_FAILED: {
@@ -356,6 +371,13 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version) {
                 delay(2000);
                 ledCtrl.turnOff();
             }
+            
+            // Revert to stable status after letting the error display briefly
+            delay(3000);
+            String resetMsg = "V" + String(FW_VERSION) + ":online";
+            if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), resetMsg.c_str(), true);
+            if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), resetMsg.c_str(), true);
+            
             break;
         }
         case HTTP_UPDATE_NO_UPDATES:
@@ -400,9 +422,10 @@ void MqttHandler::handleLampCallback(char* topic, byte* payload, unsigned int le
 
             const char* url = doc["url"] | "";
             const char* version = doc["version"] | "";
+            const char* md5 = doc["md5"] | "";
             if (strlen(url) > 0 && strlen(version) > 0) {
                 if (strcmp(version, FW_VERSION) != 0) {
-                    performOtaUpdate(url, version);
+                    performOtaUpdate(url, version, md5);
                 } else {
                     String statusTopic = "zwitscherbox/update/status";
                     String okMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Already up to date";
