@@ -357,12 +357,21 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
     Serial.printf("Sicherheits-Check: MD5 Hash Validierung aktiviert (%s)\n", md5);
     httpUpdate.setMD5sum(md5);
 
-    httpUpdate.onProgress([](int cur, int total) {
+    httpUpdate.onProgress([this, statusTopic](int cur, int total) {
         static int lastPercent = -1;
         int percent = (cur * 100) / total;
         if (percent % 10 == 0 && percent != lastPercent) {
             lastPercent = percent;
             Serial.printf("OTA Download: %d%%\n", percent);
+            
+            // Publish progress
+            String progMsg = "V" + String(FW_VERSION) + ":Updating (" + String(percent) + "%)";
+            if (config.homeassistant_mqtt_enabled && mqttClient.connected()) {
+                mqttClient.publish(statusTopic.c_str(), progMsg.c_str(), true);
+            }
+            if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
+                mqttClientLamp.publish(statusTopic.c_str(), progMsg.c_str(), true);
+            }
         }
     });
 
