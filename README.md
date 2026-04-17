@@ -168,18 +168,23 @@ A standard JSON packet from the sender (or your smart home system) looks like th
 - **`effect` (string):** Controls the animation behaviour of the NeoPixel LEDs. Supported values are `‘fade’` (soft fade), `“blink”` (flashing once per second in time with the beat) and `‘rainbow’`.
 - **`duration` (Integer):** Time in milliseconds for how long the LEDs should remain lit before switching off automatically (default: `30000` = 30 seconds). This allows Home Assistant to perfectly control the duration of the visual signals depending on the application scenario (e.g. short alarm vs. long background lighting).
 
-### 🔄 OTA Update via MQTT
+### 🔄 Secure OTA Update via MQTT
 
-The hardware also supports Over-The-Air (OTA) firmware updates triggered over MQTT. Send a JSON payload to the `zwitscherbox/update/trigger` topic (this is a static topic, independent of your topic configuration):
+The hardware fully supports firmware updates directly Over-The-Air (OTA) through MQTT. This feature integrates seamlessly with the **Lamp Manager Dashboard**. To trigger an update, send a JSON payload to the static topic `zwitscherbox/update/trigger`:
 
 ```json
 {
   "url": "http://your-server.com/firmware.bin",
-  "version": "7.0.1"
+  "version": "7.0.1",
+  "md5": "b3e3e3b3e3e3b3e3e3b3e3e3b3e3e3b3"
 }
 ```
 
-If the `version` in the payload differs from the current `FW_VERSION` in the source code, the device will pause all active audio playback, illuminate the LED ring in solid blue, and begin downloading the firmware. Detailed progress and status updates will be published to the individual status topic `zwitscherbox/status/<ClientID>` and a general log topic `zwitscherbox/update/status`. Upon successful installation, the device will automatically reboot. Should the update fail, the LEDs will briefly pulse red and an error message will be published to the status topic.
+**Key Security & UI Features:**
+- **Strict MD5 Validation:** The firmware verifies the provided `md5` hash internally before actively running the new code. If the 32-character hash is missing, invalid, or mismatched, the ESP32 aborts the update to prevent corrupted firmware installations.
+- **Dynamic LED Progress Ring:** During the download procedure, the device's RGB LED ring transforms into a real-time loading circle. The blue LEDs will incrementally light up synchronously with the download percentage (from 0% to 100%).
+- **Live MQTT Status Broadcasting:** The box continuously streams download percentage status payloads (e.g., `Updating (30%)`) directly back to the MQTT Dashboard interface, ensuring a robust user experience. 
+If the installation is successful, the ESP32 safely restarts automatically. If there are connectivity or verification issues, the NeoPixel ring flashes red and falls back to normal operations gracefully.
 
 ## 📄 Licence
 
