@@ -21,7 +21,7 @@
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 
-const char* FW_VERSION = "7.1.2";
+const char* FW_VERSION = "7.1.3"; // Major.Minor.Patch, wird in OTA-Updates und im Webinterface angezeigt
 #include <ESPAsyncWebServer.h> // For Webserver
 #include <AsyncTCP.h>          // For Webserver
 #include <DNSServer.h>         // For Captive Portal
@@ -119,6 +119,13 @@ void setup() {
 
     audio.setPinout(I2S_BCLK, I2S_LRCLK, I2S_DOUT);
     
+    // Register the new callback system for ESP32-audioI2S v3.0+
+    Audio::audio_info_callback = [](Audio::msg_t msg) {
+        if (msg.e == Audio::evt_eof) {
+            audioEngine.onAudioEof();
+        }
+    };
+
     // The initial volume is initialized via audioEngine internally now, 
     // but Audio hardware init is here.
     Serial.println("Audio hardware pins configured");
@@ -176,8 +183,4 @@ void loop() {
     }
 
     vTaskDelay(1);
-}
-
-void audio_eof_mp3(const char *info) {
-    audioEngine.onAudioEof();
 }
