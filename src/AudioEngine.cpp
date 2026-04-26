@@ -265,8 +265,12 @@ void AudioEngine::checkPirAndTimeout() {
             mqttHandler.publish(config.getTopicStatus(), "PIR Triggered");
 
             if (config.friendlamp_enabled) {
-                // Send MQTT string
-                mqttHandler.publishLamp(config.zwitscherbox_topic, "{\"client_id\":\"" + config.mqtt_client_id + "\",\"color\":\"" + config.friendlamp_color + "\",\"effect\":\"fade\",\"duration\":30000}", false);
+                // Send MQTT string with current timestamp
+                String payload = "{\"client_id\":\"" + config.mqtt_client_id + 
+                               "\",\"color\":\"" + config.friendlamp_color + 
+                               "\",\"effect\":\"fade\",\"duration\":30000" + 
+                               ",\"ts\":" + String(time(nullptr)) + "}";
+                mqttHandler.publishLamp(config.zwitscherbox_topic, payload, false);
             }
 
             playRandomTrack();
