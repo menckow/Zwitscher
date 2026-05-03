@@ -196,6 +196,7 @@ String WebManager::getHtmlPage() {
     };
     addSelectField("TIMEZONE", "Zeitzone", config.timezone, tzOptions, "Notwendig f&uuml;r korrekte Sommer-/Winterzeit.");
     addCheckbox("QUIET_TIME_ENABLED", "Ruhezeit aktivieren", config.quiet_time_enabled, "In dieser Zeit werden keine eingehenden Farben von au&szlig;en angezeigt. (NTP Server notwendig)");
+    addCheckbox("QUIET_TIME_PIR_DISABLED", "PIR in Ruhezeit deaktivieren", config.quiet_time_pir_disabled, "Der Bewegungsmelder reagiert in der Ruhezeit nicht.");
     addTimeField("QUIET_TIME_START", "Start", config.quiet_time_start, "Ab dieser Uhrzeit bleibt die Lampe stumm (z.B. 22:00).");
     addTimeField("QUIET_TIME_END", "Ende", config.quiet_time_end, "Ab dieser Uhrzeit werden wieder Farben angezeigt (z.B. 08:00).");
     page += "</div>";
@@ -334,6 +335,7 @@ void WebManager::handleSave(AsyncWebServerRequest *request) {
     // Ruhezeit
     writeParam("TIMEZONE", "TIMEZONE");
     writeCheckbox("QUIET_TIME_ENABLED", "QUIET_TIME_ENABLED");
+    writeCheckbox("QUIET_TIME_PIR_DISABLED", "QUIET_TIME_PIR_DISABLED");
     writeParam("QUIET_TIME_START", "QUIET_TIME_START");
     writeParam("QUIET_TIME_END", "QUIET_TIME_END");
 

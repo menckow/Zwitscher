@@ -66,6 +66,7 @@ void AppConfig::load() {
         else if (key == "ZWITSCHERBOX_TOPIC") zwitscherbox_topic = value;
         else if (key == "TIMEZONE") timezone = value;
         else if (key == "QUIET_TIME_ENABLED") quiet_time_enabled = (value == "1");
+        else if (key == "QUIET_TIME_PIR_DISABLED") quiet_time_pir_disabled = (value == "1");
         else if (key == "QUIET_TIME_START") quiet_time_start = value;
         else if (key == "QUIET_TIME_END") quiet_time_end = value;
         else if (key == "FRIENDLAMP_MQTT_SERVER") friendlamp_mqtt_server = value;

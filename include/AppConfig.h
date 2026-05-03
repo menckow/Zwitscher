@@ -40,6 +40,7 @@ public:
     // Time & Quiet Mode (Do Not Disturb)
     String timezone = "CET-1CEST,M3.5.0,M10.5.0/3"; // Default Germany
     bool quiet_time_enabled = false;
+    bool quiet_time_pir_disabled = false;
     String quiet_time_start = "22:00";
     String quiet_time_end = "08:00";
 

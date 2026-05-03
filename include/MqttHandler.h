@@ -25,7 +25,6 @@ private:
 
     void verifyMqttConnection();
     void internalMqttReconnect();
-    bool isQuietTime();
 
 public:
     MqttHandler();
@@ -39,6 +38,8 @@ public:
     void publishLamp(const String& topic, const String& payload, bool retain = false);
     
     void performOtaUpdate(const char* url, const char* version, const char* md5 = nullptr);
+
+    bool isQuietTime();
 
     // Static callbacks required by PubSubClient
     static void staticMqttCallback(char* topic, byte* payload, unsigned int length);
