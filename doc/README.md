@@ -65,3 +65,12 @@ As soon as your box detects motion, it not only plays an audio file but also sec
 - **Components:** ESP32 (Model: YB-ESP32-S3-AMP), PIR Motion Sensor (Pin 18), Button (Pin 17), Analog Potentiometer (Pin 4), NeoPixel LED Ring (16 LEDs on Pin 16).
 - **Storage:** NVS (Non-Volatile Storage) securely saves volume and folder selection across reboots.
 - **Playback Safety:** Individual audio tracks have a built-in time limit of 5 minutes. If the room remains unused, the system silently enters standby mode.
+
+---
+
+## 📚 Additional Documentation
+
+- [**PIR Ruhezeit & Sensor-Steuerung**](PIR_Ruhezeit_Dokumentation.md): Detailed information on PIR sensor behavior during Quiet Time and recent fixes.
+- [**Architecture Refactoring**](Architecture_Refactoring.md): Overview of the V6 code structure and module separation.
+- [**Wiring Diagram**](wiring_diagram.md): Connection guide for all hardware components.
+- [**Visual Guide**](Zwitscherbox_Visual_Guide.md): Aesthetics and design overview.
