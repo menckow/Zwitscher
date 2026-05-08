@@ -134,7 +134,9 @@ void MqttHandler::internalMqttReconnect() {
             Serial.println("connected");
             publish(config.getTopicIp(), WiFi.localIP().toString(), true);
             
-            mqttClient.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online").c_str(), true);
+            String cStr1 = config.friendlamp_color;
+            if (!cStr1.startsWith("#")) cStr1 = "#" + cStr1;
+            mqttClient.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online:" + cStr1).c_str(), true);
             publish(config.getTopicStatus(), "Online", true); 
             mqttClient.subscribe("zwitscherbox/update/trigger");
             mqttClient.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id)).c_str(), false);
@@ -171,7 +173,9 @@ void MqttHandler::internalMqttReconnect() {
             if (connected) {
                 if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(3, true); firstLampConnectAttempt = false; }
                 Serial.println("connected");
-                mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online").c_str(), true);
+                String cStr2 = config.friendlamp_color;
+                if (!cStr2.startsWith("#")) cStr2 = "#" + cStr2;
+                mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online:" + cStr2).c_str(), true);
                 
                 Serial.println("--> LAMP MQTT: Subscribing to topics: " + config.friendlamp_topic + " and " + config.zwitscherbox_topic);
                 mqttClientLamp.subscribe(config.friendlamp_topic.c_str());
