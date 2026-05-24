@@ -108,6 +108,21 @@ void LedController::setOtaProgress(int percent) {
     }
 }
 
+void LedController::showIpDigit(int numLeds, uint32_t color) {
+    if (xSemaphoreTake(mutex, (TickType_t)10) == pdTRUE) {
+        clearCurrentEffect();
+        for (uint16_t i = 0; i < strip.numPixels(); i++) {
+            if (i < numLeds) {
+                strip.setPixelColor(i, color);
+            } else {
+                strip.setPixelColor(i, 0); // Off
+            }
+        }
+        strip.show();
+        xSemaphoreGive(mutex);
+    }
+}
+
 bool LedController::isLedActive() const { return ledActive; }
 void LedController::setLedActive(bool active) { ledActive = active; }
 void LedController::setTimeout(unsigned long timeout) { ledTimeout = timeout; }

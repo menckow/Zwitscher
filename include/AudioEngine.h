@@ -39,6 +39,10 @@ private:
     unsigned long lastDebounceTime;
     
     void loadFilesFromCurrentDirectory();
+    unsigned long buttonPressStartTime;
+    bool buttonHeldActive;
+    bool ipDisplayTriggered;
+    void displayIpAddress();
 
 public:
     AudioEngine(Audio& audioRef);

@@ -39,6 +39,7 @@ public:
     void setApModeLed(bool active);
     void setSolidColor(uint32_t color);
     void setOtaProgress(int percent);
+    void showIpDigit(int numLeds, uint32_t color);
     
     // Legacy Hook wrapper
     void startFadeIn(uint32_t color, int mode = 0, bool isRainbow = false, bool isBlink = false);

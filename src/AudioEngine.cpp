@@ -1,4 +1,6 @@
 #include "AudioEngine.h"
+#include "LedController.h"
+#include <WiFi.h>
 #include "AppConfig.h"
 #include "HardwareConfig.h"
 #include "MqttHandler.h"
@@ -26,6 +28,9 @@ AudioEngine::AudioEngine(Audio& audioRef) : audio(audioRef) {
     lastButtonState = HIGH;
     buttonState = HIGH;
     lastDebounceTime = 0;
+    buttonPressStartTime = 0;
+    buttonHeldActive = false;
+    ipDisplayTriggered = false;
 }
 
 void AudioEngine::init() {
@@ -207,33 +212,48 @@ void AudioEngine::checkVolumePot() {
 void AudioEngine::checkButton() {
     int reading = digitalRead(BUTTON_PIN);
     if (reading != lastButtonState) { lastDebounceTime = millis(); }
+    
+    // Check for long press while the button is held down
+    if (buttonState == LOW && buttonHeldActive && (millis() - buttonPressStartTime >= 3000)) {
+        ipDisplayTriggered = true;
+        buttonHeldActive = false;
+        displayIpAddress();
+    }
+
     if ((millis() - lastDebounceTime) > debounceDelay) {
         if (reading != buttonState) {
             buttonState = reading;
             if (buttonState == LOW) {
+                buttonPressStartTime = millis();
+                buttonHeldActive = true;
+                ipDisplayTriggered = false;
                 lastPirActivityTime = millis();
                 if (currentState == PlaybackState::STANDBY) {
                     currentState = PlaybackState::IDLE;
                     Serial.println("Woke up from Standby (Button)");
                     mqttHandler.publish(config.getTopicStatus(), "Woke up from Standby");
                 }
-                
-                Serial.println("\n--- Button pressed! Changing directory ---");
-                mqttHandler.publish(config.getTopicStatus(), "Button Pressed");
-                
-                stopPlayback();
-                
-                if (!directoryList.empty()) {
-                    currentDirectoryIndex = (currentDirectoryIndex + 1) % directoryList.size();
-                    String newDirPath = directoryList[currentDirectoryIndex];
-                    mqttHandler.publish(config.getTopicDirectory(), newDirPath, true);
-                    loadFilesFromCurrentDirectory();
+            } else {
+                // Button released
+                buttonHeldActive = false;
+                if (!ipDisplayTriggered) {
+                    Serial.println("\n--- Button pressed! Changing directory ---");
+                    mqttHandler.publish(config.getTopicStatus(), "Button Pressed");
                     
-                    playIntro();
+                    stopPlayback();
                     
-                    preferences.begin("appState", false);
-                    preferences.putInt("dirIndex", currentDirectoryIndex);
-                    preferences.end();
+                    if (!directoryList.empty()) {
+                        currentDirectoryIndex = (currentDirectoryIndex + 1) % directoryList.size();
+                        String newDirPath = directoryList[currentDirectoryIndex];
+                        mqttHandler.publish(config.getTopicDirectory(), newDirPath, true);
+                        loadFilesFromCurrentDirectory();
+                        
+                        playIntro();
+                        
+                        preferences.begin("appState", false);
+                        preferences.putInt("dirIndex", currentDirectoryIndex);
+                        preferences.end();
+                    }
                 }
             }
         }
@@ -241,7 +261,48 @@ void AudioEngine::checkButton() {
     lastButtonState = reading;
 }
 
-#include "LedController.h"
+void AudioEngine::displayIpAddress() {
+    Serial.println("\n--- Displaying last digit of IP address (Blink Mode) ---");
+    stopPlayback();
+    
+    uint8_t lastOctet = WiFi.localIP()[3];
+    Serial.printf("Last octet of IP: %u\n", lastOctet);
+    
+    String ipStr = String(lastOctet);
+    uint8_t brightness = config.led_brightness;
+    uint32_t whiteColor = Adafruit_NeoPixel::Color(brightness, brightness, brightness);
+    uint32_t redColor = Adafruit_NeoPixel::Color(brightness, 0, 0);
+
+    int ledCountToUse = 999; 
+
+    for (size_t i = 0; i < ipStr.length(); i++) {
+        int digit = ipStr[i] - '0';
+        int blinkCount = digit + 1;
+        
+        Serial.printf("Digit %d: Blinking %d times white\n", digit, blinkCount);
+        
+        for (int b = 0; b < blinkCount; b++) {
+            ledCtrl.showIpDigit(ledCountToUse, whiteColor);
+            delay(500);
+            ledCtrl.turnOff();
+            delay(500);
+        }
+        
+        // Trennzeichen anzeigen (Rot für 1 Sekunde), falls eine weitere Ziffer folgt
+        if (i < ipStr.length() - 1) {
+            Serial.println("Separator: Red for 1 second");
+            ledCtrl.showIpDigit(ledCountToUse, redColor);
+            delay(1000);
+            ledCtrl.turnOff();
+            delay(500); // Pause vor der nächsten Ziffer
+        }
+    }
+    
+    ledCtrl.turnOff();
+    Serial.println("IP display finished.");
+}
+
+
 
 const unsigned long maxPlaybackDuration = 5 * 60 * 1000UL;
 const unsigned long deepSleepInactivityTimeout = 90 * 60 * 1000UL;
