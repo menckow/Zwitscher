@@ -127,6 +127,28 @@ FRIENDLAMP_MQTT_TLS_ENABLED=0
 ```
 If the file is omitted or both `_INTEGRATION` flags are set to `0`, the player runs completely offline.
 
+## 🔘 Folder Taster & IP Address Visualization
+
+The folder-change push button (connected to `Pin 17` or mapped Key on Audio Kit) has dual functions:
+* **Short Press (< 3 seconds)**: Stops the current playback, changes to the next directory on the SD card, and plays the directory's intro sound.
+* **Long Press (>= 3 seconds)**: Triggers the visual readout of the **last octet of the local IP address** on the RGB LED ring.
+  * **Visual Pattern (Blinking Mode)**:
+    * The last number of the IP address (e.g. `174` in `192.168.178.174`) is read out digit by digit.
+    * For each digit $D$ (0 to 9), the entire LED ring flashes white $D + 1$ times (500 ms ON / 500 ms OFF).
+    * To separate hundreds, tens, and ones, the entire LED ring lights up **Red for 1 second** (followed by a 500 ms pause).
+  * **Note**: Releasing the button after the IP display starts will **not** trigger a folder change.
+
+## 🔘 Folder Taster & IP Address Visualization
+
+The folder-change push button (connected to `Pin 17` or mapped Key on Audio Kit) has dual functions:
+* **Short Press (< 3 seconds)**: Stops the current playback, changes to the next directory on the SD card, and plays the directory's intro sound.
+* **Long Press (>= 3 seconds)**: Triggers the visual readout of the **last octet of the local IP address** on the RGB LED ring.
+  * **Visual Pattern (Blinking Mode)**:
+    * The last number of the IP address (e.g. `174` in `192.168.178.174`) is read out digit by digit.
+    * For each digit $D$ (0 to 9), the entire LED ring flashes white $D + 1$ times (500 ms ON / 500 ms OFF).
+    * To separate hundreds, tens, and ones, the entire LED ring lights up **Red for 1 second** (followed by a 500 ms pause).
+  * **Note**: Releasing the button after the IP display starts will **not** trigger a folder change.
+
 ## 🚀 Installation & Compilation
 
 This project uses **PlatformIO**. 
