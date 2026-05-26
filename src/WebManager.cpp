@@ -3,7 +3,12 @@
 #include <WiFi.h>
 #include <SD.h>
 #include <ESPAsyncWebServer.h>
+#include <Update.h>
 #include "LedController.h"
+#include "AudioEngine.h"
+#include "MqttHandler.h"
+
+extern AudioEngine audioEngine;
 
 WebManager webManager(80);
 
@@ -212,7 +217,36 @@ String WebManager::getHtmlPage() {
     page += "</div>";
 
     page += "<input type='submit' value='Konfiguration Speichern'>";
-    page += "</form><div style='height:40px;'></div></body></html>";
+    page += "</form>";
+
+    // --- Firmware-Update Card (separates Form fuer Multipart-Upload) ---
+    page += "<form id='fwForm' enctype='multipart/form-data' onsubmit='return uploadFirmware(event)' style='max-width:600px;margin:0 auto;'>";
+    page += "<div class='card'><h2>Firmware-Update</h2>";
+    page += "<p class='help-text'>Lade eine <code>.bin</code>-Datei hoch, um die Zwitscherbox direkt zu aktualisieren. Audio wird gestoppt, die LED leuchtet blau w&auml;hrend des Updates und die Box startet anschlie&szlig;end automatisch neu.</p>";
+    page += "<div class='field'><label for='fw_file'>Firmware-Datei (.bin):</label>";
+    page += "<input type='file' id='fw_file' name='firmware' accept='.bin' required></div>";
+    page += "<div class='field'><label for='fw_md5'>MD5 (optional, 32 Zeichen):</label>";
+    page += "<input type='text' id='fw_md5' name='md5' maxlength='32' placeholder='leer lassen wenn nicht bekannt'></div>";
+    page += "<input type='submit' id='fw_submit' value='Firmware hochladen'>";
+    page += "<progress id='fw_progress' value='0' max='100' style='width:100%;margin-top:15px;display:none;'></progress>";
+    page += "<div id='fw_status' style='margin-top:10px;font-size:0.9rem;'></div>";
+    page += "</div></form>";
+
+    page += "<script>";
+    page += "function uploadFirmware(ev){ev.preventDefault();";
+    page += "var f=document.getElementById('fw_file'),m=document.getElementById('fw_md5'),s=document.getElementById('fw_status'),p=document.getElementById('fw_progress'),b=document.getElementById('fw_submit');";
+    page += "if(!f.files||f.files.length===0){s.innerHTML='<span style=\"color:#b00;\">Bitte eine .bin-Datei waehlen.</span>';return false;}";
+    page += "var md5=m.value.trim();if(md5.length>0&&md5.length!==32){s.innerHTML='<span style=\"color:#b00;\">MD5 muss genau 32 Zeichen lang sein (oder leer).</span>';return false;}";
+    page += "if(!confirm('Firmware wird hochgeladen und die Box startet automatisch neu. Fortfahren?'))return false;";
+    page += "var fd=new FormData();if(md5.length===32)fd.append('md5',md5);fd.append('firmware',f.files[0],f.files[0].name);";
+    page += "var x=new XMLHttpRequest();x.open('POST','/update-firmware',true);";
+    page += "x.upload.onprogress=function(e){if(e.lengthComputable){var pct=Math.round((e.loaded/e.total)*100);p.style.display='block';p.value=pct;s.innerHTML='Upload: '+pct+'%';}};";
+    page += "x.onreadystatechange=function(){if(x.readyState===4){b.disabled=false;try{var r=JSON.parse(x.responseText||'{}');if(x.status===200&&r.ok){s.innerHTML='<span style=\"color:#0a0;\">'+(r.msg||'Erfolgreich. Neustart...')+'</span>';setTimeout(function(){location.reload();},10000);}else{s.innerHTML='<span style=\"color:#b00;\">Fehler: '+(r.error||('HTTP '+x.status))+'</span>';}}catch(e){s.innerHTML='<span style=\"color:#b00;\">Unerwartete Antwort (HTTP '+x.status+')</span>';}}};";
+    page += "x.onerror=function(){b.disabled=false;s.innerHTML='<span style=\"color:#b00;\">Verbindungsfehler beim Upload.</span>';};";
+    page += "b.disabled=true;p.value=0;p.style.display='block';s.innerHTML='Starte Upload...';x.send(fd);return false;}";
+    page += "</script>";
+
+    page += "<div style='height:40px;'></div></body></html>";
     return page;
 }
 
@@ -453,6 +487,151 @@ void WebManager::setupWebServer() {
     }
   });
   
+  // --- Firmware-Upload-OTA -----------------------------------------------
+  // Multipart-POST: Upload-Lambda schreibt chunkweise via Update.write(),
+  // Request-Lambda antwortet final. Auth wird manuell geprueft, weil ein
+  // checkAuth()-Failure via request->send(...) den laufenden Upload abbricht.
+  server.on("/update-firmware", HTTP_POST,
+    [this](AsyncWebServerRequest *request) {
+      if (!_updateAuthOk) {
+        request->requestAuthentication();
+        return;
+      }
+      bool ok = _updateFinishedOk && !Update.hasError();
+      String body;
+      if (ok) {
+        body = "{\"ok\":true,\"msg\":\"Update erfolgreich. Neustart in 2s...\"}";
+      } else {
+        String err = _updateError.length() > 0 ? _updateError : String("Unbekannter Fehler");
+        err.replace("\\", "\\\\");
+        err.replace("\"", "\\\"");
+        body = String("{\"ok\":false,\"error\":\"") + err + "\"}";
+      }
+      AsyncWebServerResponse *resp = request->beginResponse(ok ? 200 : 500, "application/json", body);
+      resp->addHeader("Connection", "close");
+      request->send(resp);
+      if (ok) {
+        pendingRestart = true;
+        restartTime = millis() + 2000;
+      }
+      _updateInProgress = false;
+    },
+    [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+      if (index == 0) {
+        _updateAuthOk = authenticateUpload(request);
+        if (!_updateAuthOk) {
+          Serial.println("Web-Upload-OTA: Auth fehlgeschlagen");
+          return;
+        }
+        _updateInProgress = true;
+        _updateFinishedOk = false;
+        _updateError = "";
+
+        Serial.printf("Web-Upload-OTA startet: %s\n", filename.c_str());
+
+        // Audio-Playback stoppen analog zum Pull-OTA in MqttHandler::performOtaUpdate()
+        if (audioEngine.getState() != PlaybackState::IDLE &&
+            audioEngine.getState() != PlaybackState::STANDBY &&
+            audioEngine.getState() != PlaybackState::INITIALIZING) {
+          audioEngine.stopPlayback();
+        }
+
+        // LED blau, falls Friendlamp-Mode aktiv
+        if (config.friendlamp_enabled) {
+          ledCtrl.setSolidColor(0x0000FF);
+        }
+
+        // MQTT-Status auf beiden Brokern
+        String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
+        String startMsg = "V" + String(FW_VERSION) + ":Updating via Web Upload";
+        if (config.homeassistant_mqtt_enabled) {
+          mqttHandler.publish(statusTopic, startMsg, true);
+          mqttHandler.publish("zwitscherbox/update/status", "Updating via Web Upload");
+        }
+        if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") {
+          mqttHandler.publishLamp(statusTopic, startMsg, true);
+          mqttHandler.publishLamp("zwitscherbox/update/status", "Updating via Web Upload");
+        }
+
+        // Optionales MD5 aus Form-Feld 'md5'
+        if (request->hasParam("md5", true)) {
+          String md5 = request->getParam("md5", true)->value();
+          md5.trim();
+          if (md5.length() == 32) {
+            Update.setMD5(md5.c_str());
+            Serial.printf("MD5 Hash gesetzt: %s\n", md5.c_str());
+          } else if (md5.length() > 0) {
+            _updateError = "MD5 muss genau 32 Zeichen lang sein";
+            Serial.println("Web-Upload-OTA: " + _updateError);
+            _updateInProgress = false;
+            if (config.friendlamp_enabled) ledCtrl.setSolidColor(0xFF0000);
+            return;
+          }
+        }
+
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+          _updateError = Update.errorString();
+          Serial.println("Web-Upload-OTA: Update.begin failed: " + _updateError);
+          _updateInProgress = false;
+          if (config.friendlamp_enabled) ledCtrl.setSolidColor(0xFF0000);
+          return;
+        }
+      }
+
+      if (!_updateAuthOk || !_updateInProgress) return;
+
+      if (len) {
+        size_t written = Update.write(data, len);
+        if (written != len) {
+          _updateError = Update.errorString();
+          Serial.println("Web-Upload-OTA: Update.write failed: " + _updateError);
+          _updateInProgress = false;
+          Update.abort();
+          if (config.friendlamp_enabled) ledCtrl.setSolidColor(0xFF0000);
+          return;
+        }
+        // grobe Fortschrittsanzeige auf LED-Ring
+        if (config.friendlamp_enabled) {
+          static size_t lastReported = 0;
+          // Wir kennen die Gesamtgroesse nicht; daher nur "puls"-Hinweis alle 32KB
+          if ((index + len) - lastReported > 32 * 1024) {
+            lastReported = index + len;
+            // setSolidColor wieder Blau, sodass evtl. Glitches verschwinden
+            ledCtrl.setSolidColor(0x0000FF);
+          }
+        }
+      }
+
+      if (final) {
+        if (Update.end(true)) {
+          _updateFinishedOk = true;
+          Serial.printf("Web-Upload-OTA erfolgreich: %u Bytes geschrieben\n", (unsigned)(index + len));
+          if (config.friendlamp_enabled) ledCtrl.setSolidColor(0x00FF00);
+
+          String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
+          String okMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Web Upload erfolgreich. Reboot...";
+          if (config.homeassistant_mqtt_enabled) {
+            mqttHandler.publish(statusTopic, okMsg, true);
+            mqttHandler.publish("zwitscherbox/update/status", okMsg);
+          }
+          if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") {
+            mqttHandler.publishLamp(statusTopic, okMsg, true);
+            mqttHandler.publishLamp("zwitscherbox/update/status", okMsg);
+          }
+        } else {
+          _updateError = Update.errorString();
+          Serial.println("Web-Upload-OTA: Update.end failed: " + _updateError);
+          if (config.friendlamp_enabled) ledCtrl.setSolidColor(0xFF0000);
+
+          String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
+          String errMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Web Upload fehlgeschlagen: " + _updateError;
+          if (config.homeassistant_mqtt_enabled) mqttHandler.publish(statusTopic, errMsg, false);
+          if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") mqttHandler.publishLamp(statusTopic, errMsg, false);
+        }
+      }
+    }
+  );
+
   server.onNotFound([this](AsyncWebServerRequest *request) {
     if (!checkAuth(request)) return;
     request->send(200, "text/html", getHtmlPage());
@@ -460,6 +639,12 @@ void WebManager::setupWebServer() {
 
   server.begin();
   Serial.println("HTTP server started.");
+}
+
+bool WebManager::authenticateUpload(AsyncWebServerRequest *request) {
+  // Konsistent zum bestehenden /api/upload Pattern in der Box.
+  if (config.admin_pass.length() == 0) return true;
+  return request->authenticate("admin", config.admin_pass.c_str());
 }
 
 void WebManager::startConfigPortal(){

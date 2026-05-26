@@ -9,10 +9,17 @@ private:
     AsyncWebServer server;
     DNSServer dns;
 
+    // Web-Upload-OTA State
+    bool _updateInProgress = false;
+    bool _updateFinishedOk = false;
+    bool _updateAuthOk = false;
+    String _updateError;
+
     String getHtmlPage();
     String getFileManagerHtml();
     void handleSave(AsyncWebServerRequest *request);
     bool checkAuth(AsyncWebServerRequest *request);
+    bool authenticateUpload(AsyncWebServerRequest *request);
 
 public:
     bool apMode;
