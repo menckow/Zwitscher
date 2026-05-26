@@ -139,6 +139,8 @@ void MqttHandler::internalMqttReconnect() {
             mqttClient.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online:" + cStr1).c_str(), true);
             publish(config.getTopicStatus(), "Online", true); 
             mqttClient.subscribe("zwitscherbox/update/trigger");
+            String perDeviceUpdateTopic = "zwitscherbox/update/trigger/" + config.mqtt_client_id;
+            mqttClient.subscribe(perDeviceUpdateTopic.c_str());
             mqttClient.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id)).c_str(), false);
              
             if (config.friendlamp_mqtt_enabled && config.friendlamp_enabled && config.friendlamp_mqtt_server == "") {
@@ -181,6 +183,8 @@ void MqttHandler::internalMqttReconnect() {
                 mqttClientLamp.subscribe(config.friendlamp_topic.c_str());
                 mqttClientLamp.subscribe(config.zwitscherbox_topic.c_str());
                 mqttClientLamp.subscribe("zwitscherbox/update/trigger");
+                String perDeviceUpdateTopicLamp = "zwitscherbox/update/trigger/" + config.mqtt_client_id;
+                mqttClientLamp.subscribe(perDeviceUpdateTopicLamp.c_str());
                 mqttClientLamp.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id)).c_str(), false);
             } else {
                 if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(3, false); firstLampConnectAttempt = false; }
@@ -444,14 +448,21 @@ void MqttHandler::handleLampCallback(char* topic, byte* payload, unsigned int le
     time_t now = time(nullptr);
 
     String otaTriggerTopic = "zwitscherbox/update/trigger";
-    if (strcmp(topic, otaTriggerTopic.c_str()) == 0) {
+    String perDeviceOtaTriggerTopic = otaTriggerTopic + "/" + config.mqtt_client_id;
+    bool isBroadcastOta = (strcmp(topic, otaTriggerTopic.c_str()) == 0);
+    bool isPerDeviceOta = (strcmp(topic, perDeviceOtaTriggerTopic.c_str()) == 0);
+    if (isBroadcastOta || isPerDeviceOta) {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, message);
         if (!error) {
-            const char* target = doc["target"] | "";
-            if (strlen(target) > 0 && strcmp(target, config.mqtt_client_id.c_str()) != 0) {
-                Serial.println("OTA: Ignored (targeted to different device)");
-                return;
+            // target-Filter nur bei Broadcast pruefen; bei Pro-Geraet-Topic
+            // ist die Adressierung bereits durch das Topic bindend.
+            if (isBroadcastOta) {
+                const char* target = doc["target"] | "";
+                if (strlen(target) > 0 && strcmp(target, config.mqtt_client_id.c_str()) != 0) {
+                    Serial.println("OTA: Ignored (targeted to different device)");
+                    return;
+                }
             }
 
             const char* url = doc["url"] | "";
