@@ -21,7 +21,7 @@
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 
-const char* FW_VERSION = "7.1.6"; // Major.Minor.Patch, wird in OTA-Updates und im Webinterface angezeigt
+const char* FW_VERSION = "7.2.1"; // Major.Minor.Patch, wird in OTA-Updates und im Webinterface angezeigt
 #include <ESPAsyncWebServer.h> // For Webserver
 #include <AsyncTCP.h>          // For Webserver
 #include <DNSServer.h>         // For Captive Portal

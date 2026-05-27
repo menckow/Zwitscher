@@ -64,6 +64,7 @@ void AppConfig::load() {
         else if (key == "FRIENDLAMP_COLOR") friendlamp_color = value;
         else if (key == "FRIENDLAMP_TOPIC") friendlamp_topic = value;
         else if (key == "ZWITSCHERBOX_TOPIC") zwitscherbox_topic = value;
+        else if (key == "FAMILY_IDS") family_ids = value;
         else if (key == "TIMEZONE") timezone = value;
         else if (key == "QUIET_TIME_ENABLED") quiet_time_enabled = (value == "1");
         else if (key == "QUIET_TIME_PIR_DISABLED") quiet_time_pir_disabled = (value == "1");

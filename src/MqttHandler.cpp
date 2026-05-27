@@ -16,13 +16,79 @@ MqttHandler mqttHandler;
 
 // --- Object Methods ---
 
-MqttHandler::MqttHandler() : 
-    mqttClient(espClient), 
+MqttHandler::MqttHandler() :
+    mqttClient(espClient),
     mqttClientLamp(espClientLamp),
     lastMqttReconnectAttempt(0),
     lastLampMqttReconnectAttempt(0),
-    mqttReconnectInterval(5000) 
+    mqttReconnectInterval(5000)
 {
+}
+
+// --- v2 Helper -----------------------------------------------------------
+
+std::vector<String> MqttHandler::getFamilies() {
+    std::vector<String> result;
+    String raw = config.family_ids;
+    int start = 0;
+    while (start <= (int)raw.length()) {
+        int comma = raw.indexOf(',', start);
+        String part = (comma < 0) ? raw.substring(start) : raw.substring(start, comma);
+        part.trim();
+        if (part.length() > 0) result.push_back(part);
+        if (comma < 0) break;
+        start = comma + 1;
+    }
+    return result;
+}
+
+String MqttHandler::getFamiliesJsonArray() {
+    String out = "[";
+    auto fams = getFamilies();
+    for (size_t i = 0; i < fams.size(); i++) {
+        if (i > 0) out += ",";
+        out += "\"";
+        out += fams[i];
+        out += "\"";
+    }
+    out += "]";
+    return out;
+}
+
+bool MqttHandler::isFamilySignalTopic(const char* topic) {
+    for (auto& t : _familySignalTopics) {
+        if (strcmp(topic, t.c_str()) == 0) return true;
+    }
+    return false;
+}
+
+String MqttHandler::getStatusTopicV2() {
+    return "fl/device/" + config.mqtt_client_id + "/status";
+}
+
+void MqttHandler::publishStatusV2(const char* state, const char* extra) {
+    String topic = getStatusTopicV2();
+    String hexColor = config.friendlamp_color;
+    if (!hexColor.startsWith("#")) hexColor = "#" + hexColor;
+
+    String payload;
+    payload.reserve(256);
+    payload += "{\"type\":\"" DEVICE_TYPE_BOX "\",";
+    payload += "\"fw\":\"V"; payload += FW_VERSION; payload += "\",";
+    payload += "\"state\":\""; payload += state; payload += "\",";
+    payload += "\"color\":\""; payload += hexColor; payload += "\",";
+    payload += "\"families\":"; payload += getFamiliesJsonArray();
+    if (extra && *extra) {
+        payload += ",\"info\":\""; payload += extra; payload += "\"";
+    }
+    payload += "}";
+
+    if (config.homeassistant_mqtt_enabled && mqttClient.connected()) {
+        mqttClient.publish(topic.c_str(), payload.c_str(), true);
+    }
+    if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
+        mqttClientLamp.publish(topic.c_str(), payload.c_str(), true);
+    }
 }
 
 void MqttHandler::setupWifi() {
@@ -86,6 +152,8 @@ void MqttHandler::setupWifi() {
         if (config.mqtt_server != "") {
             mqttClient.setServer(config.mqtt_server.c_str(), config.mqtt_port);
             mqttClient.setCallback(MqttHandler::staticMqttCallback);
+            // Buffer auf 1024 Bytes fuer v2-JSON-Status (Default 256 zu klein).
+            mqttClient.setBufferSize(1024);
             Serial.println("Internal MQTT Server configured.");
         } else {
              Serial.println("WARNING: Internal MQTT Server not configured, disabling HA integration.");
@@ -107,13 +175,32 @@ void MqttHandler::setupWifi() {
         }
         mqttClientLamp.setServer(config.friendlamp_mqtt_server.c_str(), config.friendlamp_mqtt_port);
         mqttClientLamp.setCallback(MqttHandler::staticMqttLampCallback);
+        mqttClientLamp.setBufferSize(1024);
         Serial.println("Friendship Lamp MQTT Server configured.");
     }
 }
 
 void MqttHandler::internalMqttReconnect() {
-    String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
-    String lwtMessage = "offline";
+    // v2: gemeinsame Topic-Vorbereitung
+    String statusTopicV2 = getStatusTopicV2();
+    String hexColor = config.friendlamp_color;
+    if (!hexColor.startsWith("#")) hexColor = "#" + hexColor;
+    String lwtJson = String("{\"type\":\"" DEVICE_TYPE_BOX "\"") +
+                     ",\"fw\":\"V" + FW_VERSION + "\"" +
+                     ",\"state\":\"offline\"" +
+                     ",\"color\":\"" + hexColor + "\"" +
+                     ",\"families\":" + getFamiliesJsonArray() +
+                     "}";
+
+    // Familien-Signal-Topics einmal aufbauen (gleich fuer beide Broker)
+    _familySignalTopics.clear();
+    auto fams = getFamilies();
+    for (auto& fam : fams) {
+        _familySignalTopics.push_back("fl/family/" + fam + "/signal");
+    }
+
+    // Alte v1-Status-Topic einmalig leeren (Migration-Hygiene)
+    String oldStatusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
 
     if (config.homeassistant_mqtt_enabled && !mqttClient.connected() && (lastMqttReconnectAttempt == 0 || millis() - lastMqttReconnectAttempt > mqttReconnectInterval)) {
         lastMqttReconnectAttempt = millis();
@@ -123,9 +210,9 @@ void MqttHandler::internalMqttReconnect() {
         bool connected = false;
         if (config.mqtt_user.length() > 0) {
              connected = mqttClient.connect(config.mqtt_client_id.c_str(), config.mqtt_user.c_str(), config.mqtt_pass.c_str(),
-                                          statusTopic.c_str(), 1, true, lwtMessage.c_str());
+                                          statusTopicV2.c_str(), 1, true, lwtJson.c_str());
         } else {
-             connected = mqttClient.connect(config.mqtt_client_id.c_str(), statusTopic.c_str(), 1, true, lwtMessage.c_str());
+             connected = mqttClient.connect(config.mqtt_client_id.c_str(), statusTopicV2.c_str(), 1, true, lwtJson.c_str());
         }
 
         static bool firstHaConnectAttempt = true;
@@ -133,21 +220,25 @@ void MqttHandler::internalMqttReconnect() {
             if (firstHaConnectAttempt) { ledCtrl.setBootStatusLeds(2, true); firstHaConnectAttempt = false; }
             Serial.println("connected");
             publish(config.getTopicIp(), WiFi.localIP().toString(), true);
-            
-            String cStr1 = config.friendlamp_color;
-            if (!cStr1.startsWith("#")) cStr1 = "#" + cStr1;
-            mqttClient.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online:" + cStr1).c_str(), true);
-            publish(config.getTopicStatus(), "Online", true); 
-            mqttClient.subscribe("zwitscherbox/update/trigger");
-            String perDeviceUpdateTopic = "zwitscherbox/update/trigger/" + config.mqtt_client_id;
-            mqttClient.subscribe(perDeviceUpdateTopic.c_str());
-            mqttClient.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id)).c_str(), false);
-             
-            if (config.friendlamp_mqtt_enabled && config.friendlamp_enabled && config.friendlamp_mqtt_server == "") {
-                 mqttClient.subscribe(config.friendlamp_topic.c_str());
-                 mqttClient.subscribe(config.zwitscherbox_topic.c_str());
-                 Serial.println("Subscribed to Friendlamp topics on internal broker.");
+            publish(config.getTopicStatus(), "Online", true);
+
+            // --- v2 Subscribes ----------------------------------------
+            for (auto& fam : fams) {
+                String sig    = "fl/family/" + fam + "/signal";
+                String otaFam = "fl/family/" + fam + "/update/trigger/" DEVICE_TYPE_BOX;
+                mqttClient.subscribe(sig.c_str());
+                mqttClient.subscribe(otaFam.c_str());
             }
+            String otaPerDevice = "fl/device/" + config.mqtt_client_id + "/update/trigger";
+            mqttClient.subscribe(otaPerDevice.c_str());
+            mqttClient.subscribe("fl/_global/update/trigger/" DEVICE_TYPE_BOX);
+
+            // v2 Status publishen + alten v1-Status-Topic einmalig leeren
+            publishStatusV2("online");
+            mqttClient.publish(oldStatusTopic.c_str(), "", true);
+
+            Serial.printf("HA-MQTT v2 Subscribes aktiv. Familien: %u\n", (unsigned)fams.size());
+            for (auto& fam : fams) Serial.println("    - " + fam);
         } else {
             if (firstHaConnectAttempt) { ledCtrl.setBootStatusLeds(2, false); firstHaConnectAttempt = false; }
             Serial.print("failed, rc=");
@@ -161,31 +252,36 @@ void MqttHandler::internalMqttReconnect() {
             lastLampMqttReconnectAttempt = millis();
             Serial.print("Attempting Lamp MQTT connection...");
             bool connected = false;
-            
+
             String lampClientId = config.mqtt_client_id + "_Lamp";
-            
+
             if (config.friendlamp_mqtt_user.length() > 0) {
                  connected = mqttClientLamp.connect(lampClientId.c_str(), config.friendlamp_mqtt_user.c_str(), config.friendlamp_mqtt_pass.c_str(),
-                                              statusTopic.c_str(), 1, true, lwtMessage.c_str());
+                                              statusTopicV2.c_str(), 1, true, lwtJson.c_str());
             } else {
-                 connected = mqttClientLamp.connect(lampClientId.c_str(), statusTopic.c_str(), 1, true, lwtMessage.c_str());
+                 connected = mqttClientLamp.connect(lampClientId.c_str(), statusTopicV2.c_str(), 1, true, lwtJson.c_str());
             }
 
             static bool firstLampConnectAttempt = true;
             if (connected) {
                 if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(3, true); firstLampConnectAttempt = false; }
                 Serial.println("connected");
-                String cStr2 = config.friendlamp_color;
-                if (!cStr2.startsWith("#")) cStr2 = "#" + cStr2;
-                mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online:" + cStr2).c_str(), true);
-                
-                Serial.println("--> LAMP MQTT: Subscribing to topics: " + config.friendlamp_topic + " and " + config.zwitscherbox_topic);
-                mqttClientLamp.subscribe(config.friendlamp_topic.c_str());
-                mqttClientLamp.subscribe(config.zwitscherbox_topic.c_str());
-                mqttClientLamp.subscribe("zwitscherbox/update/trigger");
-                String perDeviceUpdateTopicLamp = "zwitscherbox/update/trigger/" + config.mqtt_client_id;
-                mqttClientLamp.subscribe(perDeviceUpdateTopicLamp.c_str());
-                mqttClientLamp.publish("zwitscherbox/update/status", ("V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id)).c_str(), false);
+
+                // --- v2 Subscribes auf Friendlamp-Broker ------------------
+                for (auto& fam : fams) {
+                    String sig    = "fl/family/" + fam + "/signal";
+                    String otaFam = "fl/family/" + fam + "/update/trigger/" DEVICE_TYPE_BOX;
+                    mqttClientLamp.subscribe(sig.c_str());
+                    mqttClientLamp.subscribe(otaFam.c_str());
+                }
+                String otaPerDeviceLamp = "fl/device/" + config.mqtt_client_id + "/update/trigger";
+                mqttClientLamp.subscribe(otaPerDeviceLamp.c_str());
+                mqttClientLamp.subscribe("fl/_global/update/trigger/" DEVICE_TYPE_BOX);
+
+                publishStatusV2("online");
+                mqttClientLamp.publish(oldStatusTopic.c_str(), "", true);
+
+                Serial.printf("Friendlamp-MQTT v2 Subscribes aktiv. Familien: %u\n", (unsigned)fams.size());
             } else {
                 if (firstLampConnectAttempt) { ledCtrl.setBootStatusLeds(3, false); firstLampConnectAttempt = false; }
                 Serial.print("failed, rc=");
@@ -322,16 +418,14 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
         audioEngine.stopPlayback();
     }
 
-    String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
+    String updateStatusTopic = "fl/device/" + config.mqtt_client_id + "/update/status";
     String startMsg = "Updating to " + String(version);
-    
+    publishStatusV2("updating", startMsg.c_str());
     if (config.homeassistant_mqtt_enabled && mqttClient.connected()) {
-        mqttClient.publish(statusTopic.c_str(), (String(FW_VERSION) + ":" + startMsg).c_str(), true);
-        mqttClient.publish("zwitscherbox/update/status", startMsg.c_str());
+        mqttClient.publish(updateStatusTopic.c_str(), startMsg.c_str());
     }
     if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
-        mqttClientLamp.publish(statusTopic.c_str(), (String(FW_VERSION) + ":" + startMsg).c_str(), true);
-        mqttClientLamp.publish("zwitscherbox/update/status", startMsg.c_str());
+        mqttClientLamp.publish(updateStatusTopic.c_str(), startMsg.c_str());
     }
 
     bool isHttps = String(url).startsWith("https://");
@@ -341,48 +435,47 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
     }
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    
+
     if (md5 == nullptr || strlen(md5) != 32) {
-        String errorMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Update failed: Invalid or missing MD5 hash (must be 32 characters)";
+        String errorMsg = String(config.mqtt_client_id) + " - Update failed: Invalid or missing MD5 hash (must be 32 characters)";
         Serial.println(errorMsg);
-        if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), errorMsg.c_str(), false);
-        if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
-        
+        publishStatusV2("error", errorMsg.c_str());
+        if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(updateStatusTopic.c_str(), errorMsg.c_str(), false);
+        if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(updateStatusTopic.c_str(), errorMsg.c_str(), false);
+
         if (config.friendlamp_enabled) {
             ledCtrl.setSolidColor(0xFF0000); // Red
             delay(2000);
             ledCtrl.turnOff();
         }
-        
+
         // Revert status so dashboard recovers
         delay(3000);
-        String resetMsg = "V" + String(FW_VERSION) + ":online";
-        if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), resetMsg.c_str(), true);
-        if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), resetMsg.c_str(), true);
+        publishStatusV2("online");
         return;
     }
 
     Serial.printf("Sicherheits-Check: MD5 Hash Validierung aktiviert (%s)\n", md5);
     httpUpdate.setMD5sum(md5);
 
-    httpUpdate.onProgress([this, statusTopic](int cur, int total) {
+    httpUpdate.onProgress([this, updateStatusTopic](int cur, int total) {
         static int lastPercent = -1;
         int percent = (cur * 100) / total;
         if (percent % 10 == 0 && percent != lastPercent) {
             lastPercent = percent;
             Serial.printf("OTA Download: %d%%\n", percent);
-            
+
             if (config.friendlamp_enabled) {
                 ledCtrl.setOtaProgress(percent);
             }
-            
-            // Publish progress
-            String progMsg = "V" + String(FW_VERSION) + ":Updating (" + String(percent) + "%)";
+
+            String progMsg = "Updating (" + String(percent) + "%)";
+            publishStatusV2("updating", progMsg.c_str());
             if (config.homeassistant_mqtt_enabled && mqttClient.connected()) {
-                mqttClient.publish(statusTopic.c_str(), progMsg.c_str(), true);
+                mqttClient.publish(updateStatusTopic.c_str(), progMsg.c_str());
             }
             if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) {
-                mqttClientLamp.publish(statusTopic.c_str(), progMsg.c_str(), true);
+                mqttClientLamp.publish(updateStatusTopic.c_str(), progMsg.c_str());
             }
         }
     });
@@ -399,22 +492,20 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
 
     switch (ret) {
         case HTTP_UPDATE_FAILED: {
-            String errorMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Update failed: " + httpUpdate.getLastErrorString();
+            String errorMsg = String(config.mqtt_client_id) + " - Update failed: " + httpUpdate.getLastErrorString();
             Serial.println(errorMsg);
-            if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), errorMsg.c_str(), false);
-            if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), errorMsg.c_str(), false);
+            publishStatusV2("error", errorMsg.c_str());
+            if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(updateStatusTopic.c_str(), errorMsg.c_str(), false);
+            if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(updateStatusTopic.c_str(), errorMsg.c_str(), false);
             if (config.friendlamp_enabled) {
                 ledCtrl.setSolidColor(0xFF0000); // Red
                 delay(2000);
                 ledCtrl.turnOff();
             }
-            
+
             // Revert to stable status after letting the error display briefly
             delay(3000);
-            String resetMsg = "V" + String(FW_VERSION) + ":online";
-            if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), resetMsg.c_str(), true);
-            if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), resetMsg.c_str(), true);
-            
+            publishStatusV2("online");
             break;
         }
         case HTTP_UPDATE_NO_UPDATES:
@@ -425,9 +516,10 @@ void MqttHandler::performOtaUpdate(const char* url, const char* version, const c
             break;
         case HTTP_UPDATE_OK: {
             Serial.println("Update erfolgreich! ESP32 startet neu...");
-            String okMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Success! Rebooting...";
-            if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), okMsg.c_str(), false);
-            if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), okMsg.c_str(), false);
+            String okMsg = String(config.mqtt_client_id) + " - Success! Rebooting...";
+            publishStatusV2("updating", okMsg.c_str());
+            if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(updateStatusTopic.c_str(), okMsg.c_str(), false);
+            if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(updateStatusTopic.c_str(), okMsg.c_str(), false);
             if (config.friendlamp_enabled) {
                 ledCtrl.turnOff();
             }
@@ -443,107 +535,110 @@ void MqttHandler::handleLampCallback(char* topic, byte* payload, unsigned int le
     for (unsigned int i = 0; i < length; i++) {
         message += (char)payload[i];
     }
-    Serial.printf("Friendlamp MQTT Received [%s]: %s\n", topic, message.c_str());
-    
+    Serial.printf("MQTT Received [%s]: %s\n", topic, message.c_str());
+
     time_t now = time(nullptr);
 
-    String otaTriggerTopic = "zwitscherbox/update/trigger";
-    String perDeviceOtaTriggerTopic = otaTriggerTopic + "/" + config.mqtt_client_id;
-    bool isBroadcastOta = (strcmp(topic, otaTriggerTopic.c_str()) == 0);
-    bool isPerDeviceOta = (strcmp(topic, perDeviceOtaTriggerTopic.c_str()) == 0);
-    if (isBroadcastOta || isPerDeviceOta) {
+    // --- v2 OTA-Topics --------------------------------------------------
+    String otaPerDevice = "fl/device/" + config.mqtt_client_id + "/update/trigger";
+    String otaGlobalBox = String("fl/_global/update/trigger/") + DEVICE_TYPE_BOX;
+    bool isPerDeviceOta = (strcmp(topic, otaPerDevice.c_str()) == 0);
+    bool isGlobalOta    = (strcmp(topic, otaGlobalBox.c_str()) == 0);
+    bool isFamilyOta    = false;
+    {
+        String tStr(topic);
+        String prefix = "fl/family/";
+        String suffix = String("/update/trigger/") + DEVICE_TYPE_BOX;
+        if (tStr.startsWith(prefix) && tStr.endsWith(suffix)) {
+            isFamilyOta = true;
+        }
+    }
+
+    if (isPerDeviceOta || isGlobalOta || isFamilyOta) {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, message);
-        if (!error) {
-            // target-Filter nur bei Broadcast pruefen; bei Pro-Geraet-Topic
-            // ist die Adressierung bereits durch das Topic bindend.
-            if (isBroadcastOta) {
-                const char* target = doc["target"] | "";
-                if (strlen(target) > 0 && strcmp(target, config.mqtt_client_id.c_str()) != 0) {
-                    Serial.println("OTA: Ignored (targeted to different device)");
-                    return;
-                }
-            }
+        if (error) {
+            Serial.println("OTA: payload nicht parsebar");
+            return;
+        }
 
-            const char* url = doc["url"] | "";
-            const char* version = doc["version"] | "";
-            const char* md5 = doc["md5"] | "";
-            if (strlen(url) > 0 && strlen(version) > 0) {
-                if (strcmp(version, FW_VERSION) != 0) {
-                    performOtaUpdate(url, version, md5);
-                } else {
-                    String statusTopic = "zwitscherbox/update/status";
-                    String okMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Already up to date";
-                    if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(statusTopic.c_str(), okMsg.c_str(), false);
-                    if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(statusTopic.c_str(), okMsg.c_str(), false);
-                }
+        // Defense-in-depth: target_type-Check
+        if (!doc["target_type"].isNull()) {
+            const char* tt = doc["target_type"];
+            if (tt && strcmp(tt, DEVICE_TYPE_BOX) != 0) {
+                Serial.printf("OTA: ignoriert (target_type=%s passt nicht zu %s)\n", tt, DEVICE_TYPE_BOX);
+                return;
+            }
+        }
+
+        const char* url = doc["url"] | "";
+        const char* version = doc["version"] | "";
+        const char* md5 = doc["md5"] | "";
+        if (strlen(url) > 0 && strlen(version) > 0) {
+            if (strcmp(version, FW_VERSION) != 0) {
+                performOtaUpdate(url, version, md5);
+            } else {
+                String upStatus = "fl/device/" + config.mqtt_client_id + "/update/status";
+                String okMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Already up to date";
+                if (config.homeassistant_mqtt_enabled && mqttClient.connected()) mqttClient.publish(upStatus.c_str(), okMsg.c_str(), false);
+                if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "" && mqttClientLamp.connected()) mqttClientLamp.publish(upStatus.c_str(), okMsg.c_str(), false);
             }
         }
         return;
     }
 
-    // --- Ruhemodus Check ---
+    // --- v2 Familien-Signal-Topic? --------------------------------------
+    if (!isFamilySignalTopic(topic)) return;
+
+    // Ruhemodus
     if (isQuietTime()) {
-        Serial.println("--> handleLampCallback: Ignored message due to active Quiet Time.");
+        Serial.println("Signal ignoriert: Ruhemodus aktiv");
         return;
     }
 
-    if (config.friendlamp_enabled && strcmp(topic, config.zwitscherbox_topic.c_str()) == 0) {
-        Serial.println("--> handleLampMessage: Topic matches config.zwitscherbox_topic!");
-        
-        JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, message);
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, message);
+    if (error) {
+        Serial.println("Signal ignoriert: payload nicht parsebar");
+        return;
+    }
 
-        // --- Zeitstempel Check (Vermeidung von Retained Messages) ---
-        if (!error && !doc["ts"].isNull()) {
-            time_t msgTs = doc["ts"] | 0;
-            if (now > 0 && msgTs > 0) {
-                long age = (long)now - (long)msgTs;
-                if (abs(age) > 60) {
-                    Serial.printf("Signal ignoriert: Veraltet (Alter: %lds)\n", age);
-                    return;
-                }
+    // NTP-Schutz: Alter pruefen wenn ts mitkommt
+    if (!doc["ts"].isNull()) {
+        time_t msgTs = doc["ts"] | 0;
+        if (now > 0 && msgTs > 0) {
+            long age = (long)now - (long)msgTs;
+            if (abs(age) > 60) {
+                Serial.printf("Signal ignoriert: Veraltet (Alter: %lds)\n", age);
+                return;
             }
         }
-        
-        if (!error && !doc["client_id"].isNull()) {
-            String senderId = doc["client_id"] | "";
-            String colorStr = doc["color"] | "";
-            String effect = doc["effect"] | "fade";
-            long duration = doc["duration"] | 30000;
-            
-            if (senderId != config.mqtt_client_id && senderId.length() > 0) {
-                bool isRainbow = effect.equalsIgnoreCase("rainbow") || colorStr.equalsIgnoreCase("RAINBOW");
-                bool isBlink = effect.equalsIgnoreCase("blink");
-                
-                if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
-                ledCtrl.currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
-                ledCtrl.ledTimeout = millis() + duration;
-                ledCtrl.ledActive = true;
-                if (config.friendlamp_enabled) {
-                    ledCtrl.startFadeIn(ledCtrl.currentLedColor, 0, isRainbow, isBlink);
-                }
-            }
-        } else {
-            int separatorPos = message.indexOf(':');
-            if (separatorPos != -1) {
-                String senderId = message.substring(0, separatorPos);
-                String colorStr = message.substring(separatorPos + 1);
-                
-                if (senderId != config.mqtt_client_id) {
-                    bool isRainbow = colorStr.equalsIgnoreCase("RAINBOW");
-                    if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
-                    ledCtrl.currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
-                    ledCtrl.ledTimeout = millis() + 30000; 
-                    ledCtrl.ledActive = true;
-                    if (config.friendlamp_enabled) {
-                        ledCtrl.startFadeIn(ledCtrl.currentLedColor, 0, isRainbow, false);
-                    }
-                }
-            }
-        }
-    } else if (config.friendlamp_enabled && strcmp(topic, config.friendlamp_topic.c_str()) == 0) {
-        handleFreundschaftMessage(message);
+    }
+
+    // Self-Filter (wichtig bei Mehrfachmitgliedschaft)
+    String senderId = doc["client_id"] | "";
+    if (senderId.length() > 0 && senderId == config.mqtt_client_id) {
+        Serial.println("Signal ignoriert: eigene Nachricht");
+        return;
+    }
+
+    String colorStr = doc["color"] | "";
+    String effect = doc["effect"] | "fade";
+    long duration = doc["duration"] | 30000;
+    String senderType = doc["sender_type"] | "";  // "lamp" oder "box" (oder leer = v2 ohne Typ)
+
+    bool isRainbow = effect.equalsIgnoreCase("rainbow") || colorStr.equalsIgnoreCase("RAINBOW");
+    bool isBlink   = effect.equalsIgnoreCase("blink");
+    if (colorStr.startsWith("#")) colorStr = colorStr.substring(1);
+    ledCtrl.currentLedColor = isRainbow ? 0 : strtol(colorStr.c_str(), NULL, 16);
+    ledCtrl.ledTimeout = millis() + duration;
+    ledCtrl.ledActive = true;
+
+    // ringMode=1 aktiviert den Komplementaer-LED-Modus (siehe FadeEffect),
+    // damit der Empfaenger optisch erkennt, dass das Signal von einer Lampe stammt.
+    int ringMode = senderType.equalsIgnoreCase("lamp") ? 1 : 0;
+    if (config.friendlamp_enabled) {
+        ledCtrl.startFadeIn(ledCtrl.currentLedColor, ringMode, isRainbow, isBlink);
     }
 }
 

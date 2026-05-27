@@ -332,12 +332,29 @@ void AudioEngine::checkPirAndTimeout() {
             mqttHandler.publish(config.getTopicStatus(), "PIR Triggered");
 
             if (config.friendlamp_enabled) {
-                // Send MQTT string with current timestamp
-                String payload = "{\"client_id\":\"" + config.mqtt_client_id + 
-                               "\",\"color\":\"" + config.friendlamp_color + 
-                               "\",\"effect\":\"fade\",\"duration\":30000" + 
+                // v2: Familien-Signal an alle konfigurierten Familien fanned-out senden.
+                // sender_type='box' damit empfangende Boxen den Solid-Mode (statt
+                // Komplementaer-Mode) nutzen.
+                String hexColor = config.friendlamp_color;
+                if (!hexColor.startsWith("#")) hexColor = "#" + hexColor;
+                String payload = "{\"client_id\":\"" + config.mqtt_client_id +
+                               "\",\"sender_type\":\"box\"" +
+                               ",\"color\":\"" + hexColor + "\"" +
+                               ",\"effect\":\"fade\",\"duration\":30000" +
                                ",\"ts\":" + String(time(nullptr)) + "}";
-                mqttHandler.publishLamp(config.zwitscherbox_topic, payload, false);
+
+                auto families = mqttHandler.getFamilies();
+                if (families.empty()) {
+                    Serial.println("PIR: Familien-Signal NICHT gesendet (keine Familien konfiguriert).");
+                } else {
+                    for (auto& fam : families) {
+                        String topic = "fl/family/" + fam + "/signal";
+                        // Auf beiden Brokern bedienen, falls aktiv.
+                        if (config.homeassistant_mqtt_enabled) mqttHandler.publish(topic, payload, false);
+                        if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") mqttHandler.publishLamp(topic, payload, false);
+                        Serial.println("PIR: Signal gesendet -> " + topic);
+                    }
+                }
             }
 
             playRandomTrack();

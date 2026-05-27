@@ -183,8 +183,7 @@ String WebManager::getHtmlPage() {
     addCheckbox("FRIENDLAMP_ENABLE", "LED Hardware aktivieren", config.friendlamp_enabled, "Nur anhaken, wenn ein LED-Ring angeschlossen ist!");
     addCheckbox("FRIENDLAMP_MQTT_INTEGRATION", "MQTT Modus aktivieren", config.friendlamp_mqtt_enabled, "Vernetzt deine Box über das Internet mit den Boxen deiner Freunde.");
     addColorPicker("FRIENDLAMP_COLOR", "Wähle deine Farbe", config.friendlamp_color, "In dieser Farbe leuchten die Lampen deiner Freunde, wenn DU vor deiner Box stehst.");
-    addTextField("FRIENDLAMP_TOPIC", "Topic Freundschaft", config.friendlamp_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Freundschaftslampe haben.");
-    addTextField("ZWITSCHERBOX_TOPIC", "Topic Zwitscherbox", config.zwitscherbox_topic, "Das Topic zum Senden/Empfangen der Signale deiner Freunde wenn sie eine Zwitscherbox haben.");
+    addTextField("FAMILY_IDS", "Familienkreise (kommagetrennt)", config.family_ids, "In welchen Familienkreisen ist diese Box? z.B. 'schmidt,lieblings'. Wird beim Empfang von Signalen aus allen aufgelisteten Kreisen ausgewertet.");
     addCheckbox("LED_FADE_EFFECT", "Sanftes Ein-/Ausblenden", config.led_fade_effect, "Nutzt weiche Übergänge für die LEDs anstatt sie hart ein- und auszuschalten.");
     addNumberField("LED_FADE_DURATION", "Dauer (ms)", config.fadeDuration, "Dauer des Farbwechsels in Millisekunden (1000 = 1 Sekunde).");
     addNumberField("LED_BRIGHTNESS", "Helligkeit (0-255)", config.led_brightness, "Maximale Helligkeit des LED-Rings.");
@@ -359,8 +358,26 @@ void WebManager::handleSave(AsyncWebServerRequest *request) {
         colorValue.toUpperCase(); // Konsistent in Großbuchstaben umwandeln
         configFile.println("FRIENDLAMP_COLOR=" + colorValue);
     }
-    writeParam("FRIENDLAMP_TOPIC", "FRIENDLAMP_TOPIC");
-    writeParam("ZWITSCHERBOX_TOPIC", "ZWITSCHERBOX_TOPIC");
+    // v2: family_ids normalisiert (trim, lowercase, leere Eintraege weg) schreiben
+    if (request->hasParam("FAMILY_IDS", true)) {
+        String raw = request->getParam("FAMILY_IDS", true)->value();
+        String cleaned;
+        cleaned.reserve(raw.length());
+        int start = 0;
+        while (start <= (int)raw.length()) {
+            int comma = raw.indexOf(',', start);
+            String part = (comma < 0) ? raw.substring(start) : raw.substring(start, comma);
+            part.trim();
+            part.toLowerCase();
+            if (part.length() > 0) {
+                if (cleaned.length() > 0) cleaned += ",";
+                cleaned += part;
+            }
+            if (comma < 0) break;
+            start = comma + 1;
+        }
+        configFile.println("FAMILY_IDS=" + cleaned);
+    }
     writeCheckbox("LED_FADE_EFFECT", "LED_FADE_EFFECT");
     writeParam("LED_FADE_DURATION", "LED_FADE_DURATION");
     writeParam("LED_BRIGHTNESS", "LED_BRIGHTNESS");
@@ -541,16 +558,14 @@ void WebManager::setupWebServer() {
           ledCtrl.setSolidColor(0x0000FF);
         }
 
-        // MQTT-Status auf beiden Brokern
-        String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
-        String startMsg = "V" + String(FW_VERSION) + ":Updating via Web Upload";
+        // v2 MQTT-Status auf beiden Brokern
+        mqttHandler.publishStatusV2("updating", "Web Upload");
+        String updateStatusTopic = "fl/device/" + config.mqtt_client_id + "/update/status";
         if (config.homeassistant_mqtt_enabled) {
-          mqttHandler.publish(statusTopic, startMsg, true);
-          mqttHandler.publish("zwitscherbox/update/status", "Updating via Web Upload");
+          mqttHandler.publish(updateStatusTopic, "Updating via Web Upload");
         }
         if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") {
-          mqttHandler.publishLamp(statusTopic, startMsg, true);
-          mqttHandler.publishLamp("zwitscherbox/update/status", "Updating via Web Upload");
+          mqttHandler.publishLamp(updateStatusTopic, "Updating via Web Upload");
         }
 
         // Optionales MD5 aus Form-Feld 'md5'
@@ -608,25 +623,25 @@ void WebManager::setupWebServer() {
           Serial.printf("Web-Upload-OTA erfolgreich: %u Bytes geschrieben\n", (unsigned)(index + len));
           if (config.friendlamp_enabled) ledCtrl.setSolidColor(0x00FF00);
 
-          String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
-          String okMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Web Upload erfolgreich. Reboot...";
+          String okMsg = String(config.mqtt_client_id) + " - Web Upload erfolgreich. Reboot...";
+          mqttHandler.publishStatusV2("updating", okMsg.c_str());
+          String updateStatusTopicOk = "fl/device/" + config.mqtt_client_id + "/update/status";
           if (config.homeassistant_mqtt_enabled) {
-            mqttHandler.publish(statusTopic, okMsg, true);
-            mqttHandler.publish("zwitscherbox/update/status", okMsg);
+            mqttHandler.publish(updateStatusTopicOk, okMsg);
           }
           if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") {
-            mqttHandler.publishLamp(statusTopic, okMsg, true);
-            mqttHandler.publishLamp("zwitscherbox/update/status", okMsg);
+            mqttHandler.publishLamp(updateStatusTopicOk, okMsg);
           }
         } else {
           _updateError = Update.errorString();
           Serial.println("Web-Upload-OTA: Update.end failed: " + _updateError);
           if (config.friendlamp_enabled) ledCtrl.setSolidColor(0xFF0000);
 
-          String statusTopic = "zwitscherbox/status/" + config.mqtt_client_id;
-          String errMsg = "V" + String(FW_VERSION) + ":" + String(config.mqtt_client_id) + " - Web Upload fehlgeschlagen: " + _updateError;
-          if (config.homeassistant_mqtt_enabled) mqttHandler.publish(statusTopic, errMsg, false);
-          if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") mqttHandler.publishLamp(statusTopic, errMsg, false);
+          String errMsg = String(config.mqtt_client_id) + " - Web Upload fehlgeschlagen: " + _updateError;
+          mqttHandler.publishStatusV2("error", errMsg.c_str());
+          String updateStatusTopicErr = "fl/device/" + config.mqtt_client_id + "/update/status";
+          if (config.homeassistant_mqtt_enabled) mqttHandler.publish(updateStatusTopicErr, errMsg);
+          if (config.friendlamp_mqtt_enabled && config.friendlamp_mqtt_server != "") mqttHandler.publishLamp(updateStatusTopicErr, errMsg);
         }
       }
     }

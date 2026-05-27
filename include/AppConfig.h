@@ -34,8 +34,13 @@ public:
     int    led_count = 16;
     int    fadeDuration = 1000;
     String friendlamp_color = "0000FF";
-    String friendlamp_topic = "friendlamp/group";
-    String zwitscherbox_topic = "zwitscherbox/group";
+    String friendlamp_topic = "friendlamp/group";       // [deprecated v1] bleibt fuer Kompat erhalten
+    String zwitscherbox_topic = "zwitscherbox/group";   // [deprecated v1] bleibt fuer Kompat erhalten
+
+    // --- v2 ----------------------------------------------------------
+    // Kommaseparierte Liste von Familien-IDs, z.B. "schmidt,lieblings".
+    // Whitespace wird beim Parsen getrimmt, alles wird lowercase normalisiert.
+    String family_ids = "";
     
     // Time & Quiet Mode (Do Not Disturb)
     String timezone = "CET-1CEST,M3.5.0,M10.5.0/3"; // Default Germany
